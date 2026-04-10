@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>TQF — Order Dashboard</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      background: #f5f0eb;
+      color: #1a1a1a;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    /* Password gate */
+    .gate {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 80vh;
+    }
+    .gate-card {
+      background: #fff;
+      max-width: 400px;
+      width: 100%;
+      padding: 2.5rem;
+      border: 1px solid rgba(0,0,0,0.08);
+      text-align: center;
+    }
+    .gate-card h1 {
+      font-family: Georgia, serif;
+      font-size: 1.4rem;
+      font-weight: 400;
+      margin-bottom: 0.5rem;
+    }
+    .gate-card p {
+      font-size: 0.9rem;
+      color: #888;
+      margin-bottom: 1.5rem;
+    }
+    .gate-input {
+      padding: 0.75rem;
+      font-size: 1rem;
+      border: 1px solid rgba(0,0,0,0.12);
+      background: transparent;
+      outline: none;
+      width: 200px;
+      text-align: center;
+      font-family: inherit;
+    }
+    .gate-input:focus { border-color: rgba(0,0,0,0.35); }
+    .gate-btn {
+      display: block;
+      margin: 1rem auto 0;
+      padding: 0.75rem 2rem;
+      background: #1a1a1a;
+      color: #f5f0eb;
+      border: none;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      cursor: pointer;
+    }
+    .gate-btn:hover { opacity: 0.85; }
+    .gate-error {
+      color: #c62828;
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+      display: none;
+    }
+
+    /* Dashboard */
+    .dashboard { display: none; }
+    .dashboard-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .dashboard-header h1 {
+      font-family: Georgia, serif;
+      font-size: 1.6rem;
+      font-weight: 400;
+    }
+    .refresh-btn {
+      padding: 0.6rem 1.2rem;
+      background: #1a1a1a;
+      color: #f5f0eb;
+      border: none;
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      cursor: pointer;
+    }
+    .refresh-btn:hover { opacity: 0.85; }
+    .refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Status bar */
+    .status-bar {
+      padding: 0.75rem 1rem;
+      margin-bottom: 1.5rem;
+      font-size: 0.85rem;
+      display: none;
+    }
+    .status-bar.info { display: block; background: #f0ece5; color: #666; }
+    .status-bar.success { display: block; background: #e8f5e9; color: #2e7d32; }
+    .status-bar.error { display: block; background: #fbe9e7; color: #c62828; }
+
+    /* Table */
+    .orders-table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid #e0dbd2;
+    }
+    .orders-table th {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: #999;
+      padding: 12px 16px;
+      text-align: left;
+      background: #f5f2ed;
+      border-bottom: 1px solid #e0dbd2;
+      white-space: nowrap;
+    }
+    .orders-table td {
+      padding: 14px 16px;
+      font-size: 0.9rem;
+      border-bottom: 1px solid #f0ece5;
+      vertical-align: top;
+    }
+    .orders-table tr:last-child td { border-bottom: none; }
+    .orders-table tr:hover td { background: #faf9f6; }
+
+    .order-number {
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .order-date {
+      color: #999;
+      font-size: 0.8rem;
+      white-space: nowrap;
+    }
+    .order-customer { font-weight: 500; }
+    .order-email { color: #999; font-size: 0.8rem; }
+    .order-items { font-size: 0.85rem; color: #666; }
+    .order-total { font-weight: 600; white-space: nowrap; }
+
+    /* Checkbox */
+    .supplier-check {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+      accent-color: #1a1a1a;
+    }
+
+    /* Action button */
+    .inspect-btn {
+      padding: 0.45rem 0.8rem;
+      background: #1a1a1a;
+      color: #f5f0eb;
+      border: none;
+      font-family: inherit;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .inspect-btn:hover { opacity: 0.85; }
+    .inspect-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .inspect-btn.sent {
+      background: #e8f5e9;
+      color: #2e7d32;
+      cursor: default;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: #999;
+      font-size: 0.95rem;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      body { padding: 1rem; }
+      .orders-table { font-size: 0.8rem; display: block; overflow-x: auto; }
+      .orders-table th, .orders-table td { padding: 10px 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Password Gate -->
+  <div class="gate" id="gate">
+    <div class="gate-card">
+      <h1>TQF Admin</h1>
+      <p>Enter password to access the order dashboard.</p>
+      <input type="password" class="gate-input" id="gate-pw" placeholder="Password" />
+      <button class="gate-btn" id="gate-btn">Enter</button>
+      <div class="gate-error" id="gate-error">Incorrect password.</div>
+    </div>
+  </div>
+
+  <!-- Dashboard -->
+  <div class="dashboard" id="dashboard">
+    <div class="dashboard-header">
+      <h1>Order Dashboard</h1>
+      <button class="refresh-btn" id="refresh-btn">Refresh Orders</button>
+    </div>
+
+    <div class="status-bar" id="status-bar"></div>
+
+    <table class="orders-table" id="orders-table">
+      <thead>
+        <tr>
+          <th>Order</th>
+          <th>Date</th>
+          <th>Customer</th>
+          <th>Items</th>
+          <th>Total</th>
+          <th>Ordered</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="orders-body"></tbody>
+    </table>
+
+    <div class="empty-state" id="empty-state" style="display:none;">No unfulfilled orders.</div>
+  </div>
+
+  <script>
+    // IMPORTANT: Replace this with your Cloudflare Worker URL after deploying
+    var WORKER_URL = 'https://tqf-api.projects-kfb.workers.dev';
+    var PASSWORD = 'inspect';
+
+    // Password gate
+    document.getElementById('gate-btn').addEventListener('click', function() {
+      if (document.getElementById('gate-pw').value === PASSWORD) {
+        document.getElementById('gate').style.display = 'none';
+        document.getElementById('dashboard').style.display = 'block';
+        loadOrders();
+      } else {
+        document.getElementById('gate-error').style.display = 'block';
+      }
+    });
+    document.getElementById('gate-pw').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') document.getElementById('gate-btn').click();
+    });
+
+    // Status helper
+    function showStatus(msg, type) {
+      var bar = document.getElementById('status-bar');
+      bar.textContent = msg;
+      bar.className = 'status-bar ' + type;
+    }
+
+    // Load orders
+    function loadOrders() {
+      var btn = document.getElementById('refresh-btn');
+      btn.disabled = true;
+      btn.textContent = 'Loading...';
+      showStatus('Fetching orders from Shopify...', 'info');
+
+      fetch(WORKER_URL + '/api/orders')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          if (data.error) {
+            showStatus('Error: ' + data.error, 'error');
+            btn.disabled = false;
+            btn.textContent = 'Refresh Orders';
+            return;
+          }
+          renderOrders(data.orders);
+          showStatus(data.orders.length + ' unfulfilled order(s) loaded.', 'success');
+          btn.disabled = false;
+          btn.textContent = 'Refresh Orders';
+        })
+        .catch(function(err) {
+          showStatus('Failed to fetch orders: ' + err.message, 'error');
+          btn.disabled = false;
+          btn.textContent = 'Refresh Orders';
+        });
+    }
+
+    // Get supplier checkbox state from localStorage
+    function getSupplierState() {
+      try { return JSON.parse(localStorage.getItem('tqf_supplier') || '{}'); }
+      catch(e) { return {}; }
+    }
+    function saveSupplierState(state) {
+      localStorage.setItem('tqf_supplier', JSON.stringify(state));
+    }
+
+    // Get sent state from localStorage
+    function getSentState() {
+      try { return JSON.parse(localStorage.getItem('tqf_sent') || '{}'); }
+      catch(e) { return {}; }
+    }
+    function saveSentState(state) {
+      localStorage.setItem('tqf_sent', JSON.stringify(state));
+    }
+
+    // Render orders
+    function renderOrders(orders) {
+      var tbody = document.getElementById('orders-body');
+      var empty = document.getElementById('empty-state');
+      var table = document.getElementById('orders-table');
+      tbody.textContent = '';
+
+      if (orders.length === 0) {
+        table.style.display = 'none';
+        empty.style.display = 'block';
+        return;
+      }
+
+      table.style.display = 'table';
+      empty.style.display = 'none';
+
+      var supplierState = getSupplierState();
+      var sentState = getSentState();
+
+      orders.forEach(function(order) {
+        var tr = document.createElement('tr');
+
+        // Order #
+        var tdOrder = document.createElement('td');
+        var numDiv = document.createElement('div');
+        numDiv.className = 'order-number';
+        numDiv.textContent = order.name;
+        tdOrder.appendChild(numDiv);
+        tr.appendChild(tdOrder);
+
+        // Date
+        var tdDate = document.createElement('td');
+        tdDate.className = 'order-date';
+        var d = new Date(order.created_at);
+        tdDate.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        tr.appendChild(tdDate);
+
+        // Customer
+        var tdCust = document.createElement('td');
+        var nameDiv = document.createElement('div');
+        nameDiv.className = 'order-customer';
+        nameDiv.textContent = order.customer_name;
+        var emailDiv = document.createElement('div');
+        emailDiv.className = 'order-email';
+        emailDiv.textContent = order.email;
+        tdCust.appendChild(nameDiv);
+        tdCust.appendChild(emailDiv);
+        tr.appendChild(tdCust);
+
+        // Items
+        var tdItems = document.createElement('td');
+        tdItems.className = 'order-items';
+        var itemTexts = order.items.map(function(i) {
+          return i.title + (i.variant ? ' (' + i.variant + ')' : '') + ' x' + i.quantity;
+        });
+        tdItems.textContent = itemTexts.join(', ');
+        tr.appendChild(tdItems);
+
+        // Total
+        var tdTotal = document.createElement('td');
+        tdTotal.className = 'order-total';
+        tdTotal.textContent = '$' + parseFloat(order.total).toFixed(2);
+        tr.appendChild(tdTotal);
+
+        // Supplier checkbox
+        var tdSupplier = document.createElement('td');
+        tdSupplier.style.textAlign = 'center';
+        var cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.className = 'supplier-check';
+        cb.checked = !!supplierState[order.name];
+        cb.addEventListener('change', function() {
+          var state = getSupplierState();
+          state[order.name] = cb.checked;
+          saveSupplierState(state);
+        });
+        tdSupplier.appendChild(cb);
+        tr.appendChild(tdSupplier);
+
+        // Action button
+        var tdAction = document.createElement('td');
+        var btn = document.createElement('button');
+        btn.className = 'inspect-btn';
+
+        if (sentState[order.name]) {
+          btn.className = 'inspect-btn sent';
+          btn.textContent = 'Sent';
+          btn.disabled = true;
+        } else {
+          btn.textContent = 'Send Inspection';
+          btn.addEventListener('click', (function(o, b) {
+            return function() {
+              b.disabled = true;
+              b.textContent = 'Sending...';
+              fetch(WORKER_URL + '/api/inspect', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: o.email, order_number: o.name })
+              })
+              .then(function(r) { return r.json(); })
+              .then(function(data) {
+                if (data.success) {
+                  b.className = 'inspect-btn sent';
+                  b.textContent = 'Sent';
+                  var state = getSentState();
+                  state[o.name] = true;
+                  saveSentState(state);
+                  showStatus('Inspection email triggered for ' + o.name, 'success');
+                } else {
+                  b.disabled = false;
+                  b.textContent = 'Send Inspection';
+                  showStatus('Failed for ' + o.name + ': ' + (data.error || 'Unknown error'), 'error');
+                }
+              })
+              .catch(function(err) {
+                b.disabled = false;
+                b.textContent = 'Send Inspection';
+                showStatus('Failed for ' + o.name + ': ' + err.message, 'error');
+              });
+            };
+          })(order, btn));
+        }
+
+        tdAction.appendChild(btn);
+        tr.appendChild(tdAction);
+
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Refresh button
+    document.getElementById('refresh-btn').addEventListener('click', loadOrders);
+  </script>
+
+</body>
+</html>
