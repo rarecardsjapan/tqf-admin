@@ -214,6 +214,44 @@
     .resend-btn:hover { color: #1a1a1a; border-color: #8a8579; }
     .resend-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+    /* Failed state (send did not go through) */
+    .failed-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.45rem 0.8rem;
+      background: #fbe9e7;
+      color: #c62828;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+    .failed-label::before {
+      content: "";
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: #c62828;
+    }
+    .retry-btn {
+      padding: 0.4rem 0.7rem;
+      background: #c62828;
+      color: #fff;
+      border: none;
+      font-family: inherit;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .retry-btn:hover { opacity: 0.88; }
+    .retry-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .orders-table tr.is-failed td { background: #fdf4f2; }
+    .orders-table tr.is-failed:hover td { background: #fbeeeb; }
+
     /* Empty state */
     .empty-state {
       text-align: center;
@@ -333,13 +371,21 @@
       localStorage.setItem('tqf_supplier', JSON.stringify(state));
     }
 
-    // Get sent state from localStorage
+    // Get sent state from localStorage (optimistic, per-device fallback).
     function getSentState() {
       try { return JSON.parse(localStorage.getItem('tqf_sent') || '{}'); }
       catch(e) { return {}; }
     }
     function saveSentState(state) {
       localStorage.setItem('tqf_sent', JSON.stringify(state));
+    }
+
+    // Authoritative, shared sent-state: the order carries an 'inspected' tag in
+    // Shopify once a real send succeeds, so every device sees the same thing.
+    // localStorage is only an optimistic fallback for the device that just sent.
+    function isInspected(order) {
+      var tags = (order.tags || '').split(',').map(function(t) { return t.trim().toLowerCase(); });
+      return tags.indexOf('inspected') !== -1 || !!getSentState()[order.name];
     }
 
     // Fire the inspection event via the Worker. Resolves true on confirmed
@@ -351,7 +397,12 @@
       return fetch(WORKER_URL + '/api/inspect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: order.email, order_number: order.name })
+        body: JSON.stringify({
+          email: order.email,
+          order_number: order.name,
+          order_id: order.id,
+          tags: order.tags || ''
+        })
       })
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -359,7 +410,13 @@
           var state = getSentState();
           state[order.name] = true;
           saveSentState(state);
-          showStatus('Inspection email sent for ' + order.name + ' to ' + order.email, 'success');
+          // Keep the in-memory order in sync so a re-render still reads as sent.
+          if ((order.tags || '').toLowerCase().indexOf('inspected') === -1) {
+            order.tags = (order.tags ? order.tags + ', ' : '') + 'inspected';
+          }
+          var msg = 'Inspection email sent for ' + order.name + ' to ' + order.email;
+          if (data.tagged === false) msg += ' (note: could not tag the order — shared status may not sync)';
+          showStatus(msg, 'success');
           return true;
         }
         showStatus('Failed for ' + order.name + ': ' + (data.error || 'Unknown error'), 'error');
@@ -382,14 +439,20 @@
       var wrap = document.createElement('div');
       wrap.className = 'action-wrap';
 
+      function rowClass(name, on) {
+        var tr = wrap.closest ? wrap.closest('tr') : null;
+        if (tr) tr.classList[on ? 'add' : 'remove'](name);
+      }
+
       function renderUnsent() {
         wrap.textContent = '';
+        rowClass('is-failed', false);
         var btn = document.createElement('button');
         btn.className = 'inspect-btn';
         btn.textContent = 'Send Inspection';
         btn.addEventListener('click', function() {
           fireInspection(order, btn, 'Sending...').then(function(ok) {
-            if (ok) renderSent();
+            if (ok) renderSent(); else renderFailed();
           });
         });
         wrap.appendChild(btn);
@@ -397,6 +460,7 @@
 
       function renderSent() {
         wrap.textContent = '';
+        rowClass('is-failed', false);
         var label = document.createElement('span');
         label.className = 'sent-label';
         label.textContent = 'Sent';
@@ -413,7 +477,25 @@
         wrap.appendChild(resend);
       }
 
-      if (getSentState()[order.name]) renderSent(); else renderUnsent();
+      function renderFailed() {
+        wrap.textContent = '';
+        rowClass('is-failed', true);
+        var label = document.createElement('span');
+        label.className = 'failed-label';
+        label.textContent = 'Failed';
+        var retry = document.createElement('button');
+        retry.className = 'retry-btn';
+        retry.textContent = 'Retry';
+        retry.addEventListener('click', function() {
+          fireInspection(order, retry, 'Retrying...').then(function(ok) {
+            if (ok) renderSent(); else renderFailed();
+          });
+        });
+        wrap.appendChild(label);
+        wrap.appendChild(retry);
+      }
+
+      if (isInspected(order)) renderSent(); else renderUnsent();
       return wrap;
     }
 
