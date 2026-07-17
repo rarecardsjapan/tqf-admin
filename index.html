@@ -252,6 +252,60 @@
     .orders-table tr.is-failed td { background: #fdf4f2; }
     .orders-table tr.is-failed:hover td { background: #fbeeeb; }
 
+    /* View tabs (Orders / To Order) */
+    .viewtabs { display: inline-flex; border: 1px solid #e0dbd2; background: #fff; margin-bottom: 1.5rem; }
+    .viewtabs button {
+      padding: 0.6rem 1.4rem; background: transparent; border: none; border-right: 1px solid #e0dbd2;
+      font-family: inherit; font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em;
+      color: #999; cursor: pointer;
+    }
+    .viewtabs button:last-child { border-right: none; }
+    .viewtabs button.active { background: #1a1a1a; color: #f5f0eb; }
+    .panel { display: none; }
+    .panel.active { display: block; }
+
+    /* To Order sub-toggle + actions */
+    .subbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
+    .subtabs { display: inline-flex; border: 1px solid #e0dbd2; background: #fff; }
+    .subtabs button {
+      padding: 0.5rem 1.1rem; background: transparent; border: none; border-right: 1px solid #e0dbd2;
+      font-family: inherit; font-size: 0.7rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+      color: #999; cursor: pointer;
+    }
+    .subtabs button:last-child { border-right: none; }
+    .subtabs button.active { background: #e8e2d9; color: #1a1a1a; }
+    .copy-btn {
+      padding: 0.5rem 1rem; background: transparent; color: #8a8579; border: 1px solid #e0dbd2;
+      font-family: inherit; font-size: 0.68rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; cursor: pointer;
+    }
+    .copy-btn:hover { color: #1a1a1a; border-color: #8a8579; }
+    .caption { font-size: 0.8rem; color: #999; margin-bottom: 1rem; }
+
+    /* Buy-list table */
+    table.buy { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #e0dbd2; }
+    .buy th {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #999;
+      padding: 12px 16px; text-align: left; background: #f5f2ed; border-bottom: 1px solid #e0dbd2; white-space: nowrap;
+    }
+    .buy td { padding: 13px 16px; font-size: 0.9rem; border-bottom: 1px solid #f0ece5; vertical-align: middle; }
+    .buy tr:last-child td { border-bottom: none; }
+    .buy tr:hover td { background: #faf9f6; }
+    .buy .prod { font-weight: 500; }
+    .buy .variant { color: #6f6a62; }
+    .buy .qty { font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+    .buy .since { color: #999; font-size: 0.82rem; white-space: nowrap; }
+    .buy th.qty-h { text-align: center; }
+
+    /* By-date groups */
+    .daygroup { background: #fff; border: 1px solid #e0dbd2; margin-bottom: 1rem; }
+    .dayhead { display: flex; align-items: baseline; justify-content: space-between; padding: 11px 16px; background: #f5f2ed; border-bottom: 1px solid #e0dbd2; }
+    .dayhead .d { font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.08em; }
+    .dayhead .c { font-size: 0.75rem; color: #999; }
+    .dayrow { display: flex; align-items: center; gap: 0.75rem; padding: 11px 16px; border-bottom: 1px solid #f0ece5; font-size: 0.9rem; }
+    .dayrow:last-child { border-bottom: none; }
+    .dayrow .q { min-width: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .dayrow .v { color: #6f6a62; }
+
     /* Empty state */
     .empty-state {
       text-align: center;
@@ -290,28 +344,59 @@
 
     <div class="status-bar" id="status-bar"></div>
 
-    <table class="orders-table" id="orders-table">
-      <thead>
-        <tr>
-          <th>Order</th>
-          <th>Date</th>
-          <th>Customer</th>
-          <th>Items</th>
-          <th>Total</th>
-          <th>Ordered</th>
-          <th>Action</th>
-        </tr>
-      </thead>
-      <tbody id="orders-body"></tbody>
-    </table>
+    <div class="viewtabs" id="viewtabs">
+      <button data-view="orders" class="active">Orders</button>
+      <button data-view="toorder">To Order</button>
+    </div>
 
-    <div class="empty-state" id="empty-state" style="display:none;">No unfulfilled orders.</div>
+    <!-- Orders panel -->
+    <div class="panel active" id="panel-orders">
+      <table class="orders-table" id="orders-table">
+        <thead>
+          <tr>
+            <th>Order</th>
+            <th>Date</th>
+            <th>Customer</th>
+            <th>Items</th>
+            <th>Total</th>
+            <th>Ordered</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="orders-body"></tbody>
+      </table>
+      <div class="empty-state" id="empty-state" style="display:none;">No unfulfilled orders.</div>
+    </div>
+
+    <!-- To Order panel (supplier-safe: no order #, customer, or price) -->
+    <div class="panel" id="panel-toorder">
+      <div class="subbar">
+        <div class="subtabs">
+          <button data-sub="buy" class="active">Buy-list</button>
+          <button data-sub="date">By date</button>
+        </div>
+        <button class="copy-btn" id="copyBtn">Copy as text</button>
+      </div>
+      <p class="caption" id="toorder-caption"></p>
+      <div id="sub-buy">
+        <table class="buy">
+          <thead>
+            <tr><th>Product</th><th>Variant</th><th class="qty-h">Qty</th><th>Since</th></tr>
+          </thead>
+          <tbody id="buyBody"></tbody>
+        </table>
+      </div>
+      <div id="sub-date" style="display:none;"></div>
+      <div class="empty-state" id="toorder-empty" style="display:none;">Nothing to order — all caught up.</div>
+    </div>
   </div>
 
   <script>
     // IMPORTANT: Replace this with your Cloudflare Worker URL after deploying
     var WORKER_URL = 'https://tqf-api.projects-kfb.workers.dev';
     var PASSWORD = 'inspect';
+    var ALL_ORDERS = [];
+    var _toBuy = [], _toByDate = [];
 
     // Password gate
     document.getElementById('gate-btn').addEventListener('click', function() {
@@ -350,7 +435,9 @@
             btn.textContent = 'Refresh Orders';
             return;
           }
-          renderOrders(data.orders);
+          ALL_ORDERS = data.orders || [];
+          renderOrders(ALL_ORDERS);
+          renderToOrder();
           showStatus(data.orders.length + ' unfulfilled order(s) loaded.', 'success');
           btn.disabled = false;
           btn.textContent = 'Refresh Orders';
@@ -362,13 +449,60 @@
         });
     }
 
-    // Get supplier checkbox state from localStorage
+    // Get supplier checkbox state from localStorage (optimistic, per-device fallback).
     function getSupplierState() {
       try { return JSON.parse(localStorage.getItem('tqf_supplier') || '{}'); }
       catch(e) { return {}; }
     }
     function saveSupplierState(state) {
       localStorage.setItem('tqf_supplier', JSON.stringify(state));
+    }
+
+    // Add/remove a tag in a comma string, case-insensitively (mirrors the Worker).
+    function applyTag(tags, tag, add) {
+      var low = tag.toLowerCase();
+      var list = (tags || '').split(',').map(function(t) { return t.trim(); }).filter(Boolean)
+        .filter(function(t) { return t.toLowerCase() !== low; });
+      if (add) list.push(tag);
+      return list.join(', ');
+    }
+
+    // Shared "ordered from supplier" state via the 'sourced' Shopify tag, so both
+    // operators agree on any device. localStorage stays as an optimistic fallback.
+    function isOrdered(order) {
+      var tags = (order.tags || '').split(',').map(function(t) { return t.trim().toLowerCase(); });
+      return tags.indexOf('sourced') !== -1 || !!getSupplierState()[order.name];
+    }
+
+    // Toggle the shared 'sourced' tag via the Worker. On failure, revert the box.
+    function fireOrdered(order, cb) {
+      var value = cb.checked;
+      cb.disabled = true;
+      return fetch(WORKER_URL + '/api/ordered', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: order.id, tags: order.tags || '', value: value })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        cb.disabled = false;
+        if (data.success) {
+          order.tags = applyTag(order.tags, 'sourced', value);
+          var st = getSupplierState(); st[order.name] = value; saveSupplierState(st);
+          showStatus((value ? 'Marked ordered: ' : 'Unmarked ordered: ') + order.name, 'success');
+          renderToOrder();
+          return true;
+        }
+        cb.checked = !value;
+        showStatus('Could not update Ordered for ' + order.name + ': ' + (data.error || 'Unknown error'), 'error');
+        return false;
+      })
+      .catch(function(err) {
+        cb.disabled = false;
+        cb.checked = !value;
+        showStatus('Could not update Ordered for ' + order.name + ': ' + err.message, 'error');
+        return false;
+      });
     }
 
     // Get sent state from localStorage (optimistic, per-device fallback).
@@ -569,11 +703,9 @@
         var cb = document.createElement('input');
         cb.type = 'checkbox';
         cb.className = 'supplier-check';
-        cb.checked = !!supplierState[order.name];
+        cb.checked = isOrdered(order);
         cb.addEventListener('change', function() {
-          var state = getSupplierState();
-          state[order.name] = cb.checked;
-          saveSupplierState(state);
+          fireOrdered(order, cb);
         });
         tdSupplier.appendChild(cb);
         tr.appendChild(tdSupplier);
@@ -586,6 +718,154 @@
         tbody.appendChild(tr);
       });
     }
+
+    // ---- To Order (supplier buy-list) ----
+    function fmtDay(iso) {
+      return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+    function dayKey(iso) {
+      var d = new Date(iso);
+      return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    }
+
+    // Consolidate line items across orders into one row per product+variant.
+    function buildBuyList(orders) {
+      var map = {};
+      orders.forEach(function(o) {
+        (o.items || []).forEach(function(it) {
+          var key = it.title + '|' + (it.variant || '');
+          if (!map[key]) map[key] = { title: it.title, variant: it.variant || '', qty: 0, since: o.created_at };
+          map[key].qty += it.quantity;
+          if (new Date(o.created_at) < new Date(map[key].since)) map[key].since = o.created_at;
+        });
+      });
+      return Object.keys(map).map(function(k) { return map[k]; }).sort(function(a, b) {
+        var diff = new Date(a.since) - new Date(b.since);
+        return diff !== 0 ? diff : a.title.localeCompare(b.title);
+      });
+    }
+
+    // Group orders by day (oldest first); consolidate items within each day.
+    function buildByDate(orders) {
+      var groups = {};
+      orders.forEach(function(o) {
+        var k = dayKey(o.created_at);
+        if (!groups[k]) groups[k] = { date: o.created_at, items: {} };
+        (o.items || []).forEach(function(it) {
+          var ik = it.title + '|' + (it.variant || '');
+          if (!groups[k].items[ik]) groups[k].items[ik] = { title: it.title, variant: it.variant || '', qty: 0 };
+          groups[k].items[ik].qty += it.quantity;
+        });
+      });
+      return Object.keys(groups).sort().map(function(k) {
+        var g = groups[k];
+        var items = Object.keys(g.items).map(function(x) { return g.items[x]; })
+          .sort(function(a, b) { return a.title.localeCompare(b.title); });
+        var units = items.reduce(function(s, i) { return s + i.qty; }, 0);
+        return { date: g.date, items: items, units: units };
+      });
+    }
+
+    function activeSub() {
+      var b = document.querySelector('.subtabs button.active');
+      return b ? b.dataset.sub : 'buy';
+    }
+
+    function renderToOrder() {
+      // Only items not yet ordered from the supplier.
+      var pending = ALL_ORDERS.filter(function(o) { return !isOrdered(o); });
+      _toBuy = buildBuyList(pending);
+      _toByDate = buildByDate(pending);
+      var sub = activeSub();
+      var empty = _toBuy.length === 0;
+
+      // Buy-list rows
+      var buyBody = document.getElementById('buyBody');
+      buyBody.textContent = '';
+      _toBuy.forEach(function(r) {
+        var tr = document.createElement('tr');
+        var t1 = document.createElement('td'); t1.className = 'prod'; t1.textContent = r.title;
+        var t2 = document.createElement('td'); t2.className = 'variant'; t2.textContent = r.variant || '—';
+        var t3 = document.createElement('td'); t3.className = 'qty'; t3.textContent = r.qty;
+        var t4 = document.createElement('td'); t4.className = 'since'; t4.textContent = fmtDay(r.since);
+        tr.appendChild(t1); tr.appendChild(t2); tr.appendChild(t3); tr.appendChild(t4);
+        buyBody.appendChild(tr);
+      });
+
+      // By-date groups
+      var subDate = document.getElementById('sub-date');
+      subDate.textContent = '';
+      _toByDate.forEach(function(g) {
+        var box = document.createElement('div'); box.className = 'daygroup';
+        var head = document.createElement('div'); head.className = 'dayhead';
+        var d = document.createElement('span'); d.className = 'd'; d.textContent = fmtDay(g.date);
+        var c = document.createElement('span'); c.className = 'c';
+        c.textContent = g.units + ' piece' + (g.units === 1 ? '' : 's') + ' to order';
+        head.appendChild(d); head.appendChild(c); box.appendChild(head);
+        g.items.forEach(function(it) {
+          var row = document.createElement('div'); row.className = 'dayrow';
+          var q = document.createElement('span'); q.className = 'q'; q.textContent = 'x' + it.qty;
+          var name = document.createElement('span'); name.textContent = it.title;
+          var v = document.createElement('span'); v.className = 'v'; v.textContent = it.variant ? '(' + it.variant + ')' : '';
+          row.appendChild(q); row.appendChild(name); row.appendChild(v); box.appendChild(row);
+        });
+        subDate.appendChild(box);
+      });
+
+      // Caption + visibility
+      var pieces = _toBuy.reduce(function(s, r) { return s + r.qty; }, 0);
+      var cap = document.getElementById('toorder-caption');
+      cap.textContent = sub === 'buy'
+        ? pieces + ' piece' + (pieces === 1 ? '' : 's') + ' across ' + _toBuy.length + ' product' + (_toBuy.length === 1 ? '' : 's') + ' to order. Items you tick Ordered drop off automatically.'
+        : 'Grouped by order date, oldest first. Duplicate products merged within a day.';
+
+      document.getElementById('toorder-empty').style.display = empty ? 'block' : 'none';
+      document.querySelector('#panel-toorder .subbar').style.display = empty ? 'none' : 'flex';
+      cap.style.display = empty ? 'none' : 'block';
+      document.getElementById('sub-buy').style.display = (!empty && sub === 'buy') ? 'block' : 'none';
+      document.getElementById('sub-date').style.display = (!empty && sub === 'date') ? 'block' : 'none';
+    }
+
+    // View toggle (Orders / To Order)
+    document.querySelectorAll('.viewtabs button').forEach(function(b) {
+      b.addEventListener('click', function() {
+        document.querySelectorAll('.viewtabs button').forEach(function(x) { x.classList.remove('active'); });
+        b.classList.add('active');
+        document.getElementById('panel-orders').classList.toggle('active', b.dataset.view === 'orders');
+        document.getElementById('panel-toorder').classList.toggle('active', b.dataset.view === 'toorder');
+        if (b.dataset.view === 'toorder') renderToOrder();
+      });
+    });
+
+    // Sub-toggle (Buy-list / By date)
+    document.querySelectorAll('.subtabs button').forEach(function(b) {
+      b.addEventListener('click', function() {
+        document.querySelectorAll('.subtabs button').forEach(function(x) { x.classList.remove('active'); });
+        b.classList.add('active');
+        renderToOrder();
+      });
+    });
+
+    // Copy the current view as plain text for relaying to the supplier.
+    document.getElementById('copyBtn').addEventListener('click', function() {
+      var text;
+      if (activeSub() === 'buy') {
+        text = 'TO ORDER\n' + _toBuy.map(function(r) {
+          return '- ' + r.qty + 'x ' + r.title + (r.variant ? ' (' + r.variant + ')' : '');
+        }).join('\n');
+      } else {
+        text = _toByDate.map(function(g) {
+          return fmtDay(g.date) + '\n' + g.items.map(function(it) {
+            return '  - ' + it.qty + 'x ' + it.title + (it.variant ? ' (' + it.variant + ')' : '');
+          }).join('\n');
+        }).join('\n\n');
+      }
+      navigator.clipboard.writeText(text).then(function() {
+        var btn = document.getElementById('copyBtn');
+        var prev = btn.textContent; btn.textContent = 'Copied ✓';
+        setTimeout(function() { btn.textContent = prev; }, 1400);
+      });
+    });
 
     // Refresh button
     document.getElementById('refresh-btn').addEventListener('click', loadOrders);
