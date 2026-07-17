@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>TQF — Order Dashboard</title>
+  <title>TQE — Order Dashboard</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -185,6 +185,35 @@
       cursor: default;
     }
 
+    /* Sent status + re-send control */
+    .action-wrap { display: flex; align-items: center; gap: 0.5rem; }
+    .sent-label {
+      display: inline-block;
+      padding: 0.45rem 0.8rem;
+      background: #e8f5e9;
+      color: #2e7d32;
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      white-space: nowrap;
+    }
+    .resend-btn {
+      padding: 0.4rem 0.6rem;
+      background: transparent;
+      color: #8a8579;
+      border: 1px solid #e0dbd2;
+      font-family: inherit;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .resend-btn:hover { color: #1a1a1a; border-color: #8a8579; }
+    .resend-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
     /* Empty state */
     .empty-state {
       text-align: center;
@@ -206,7 +235,7 @@
   <!-- Password Gate -->
   <div class="gate" id="gate">
     <div class="gate-card">
-      <h1>TQF Admin</h1>
+      <h1>TQE Admin</h1>
       <p>Enter password to access the order dashboard.</p>
       <input type="password" class="gate-input" id="gate-pw" placeholder="Password" />
       <button class="gate-btn" id="gate-btn">Enter</button>
@@ -313,6 +342,81 @@
       localStorage.setItem('tqf_sent', JSON.stringify(state));
     }
 
+    // Fire the inspection event via the Worker. Resolves true on confirmed
+    // success, false otherwise. Only a real success flips the Sent state.
+    function fireInspection(order, btn, busyLabel) {
+      btn.disabled = true;
+      var prev = btn.textContent;
+      btn.textContent = busyLabel;
+      return fetch(WORKER_URL + '/api/inspect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: order.email, order_number: order.name })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.success) {
+          var state = getSentState();
+          state[order.name] = true;
+          saveSentState(state);
+          showStatus('Inspection email sent for ' + order.name + ' to ' + order.email, 'success');
+          return true;
+        }
+        showStatus('Failed for ' + order.name + ': ' + (data.error || 'Unknown error'), 'error');
+        btn.disabled = false;
+        btn.textContent = prev;
+        return false;
+      })
+      .catch(function(err) {
+        showStatus('Failed for ' + order.name + ': ' + err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = prev;
+        return false;
+      });
+    }
+
+    // Build the action cell: "Send Inspection" when unsent, or a green "Sent"
+    // status with a small "Re-send" button once sent (so a stuck/failed row is
+    // always recoverable without touching the API directly).
+    function buildActionControl(order) {
+      var wrap = document.createElement('div');
+      wrap.className = 'action-wrap';
+
+      function renderUnsent() {
+        wrap.textContent = '';
+        var btn = document.createElement('button');
+        btn.className = 'inspect-btn';
+        btn.textContent = 'Send Inspection';
+        btn.addEventListener('click', function() {
+          fireInspection(order, btn, 'Sending...').then(function(ok) {
+            if (ok) renderSent();
+          });
+        });
+        wrap.appendChild(btn);
+      }
+
+      function renderSent() {
+        wrap.textContent = '';
+        var label = document.createElement('span');
+        label.className = 'sent-label';
+        label.textContent = 'Sent';
+        var resend = document.createElement('button');
+        resend.className = 'resend-btn';
+        resend.textContent = 'Re-send';
+        resend.addEventListener('click', function() {
+          if (!confirm('Re-send the inspection email for ' + order.name + ' to ' + order.email + '?')) return;
+          fireInspection(order, resend, 'Re-sending...').then(function() {
+            renderSent();
+          });
+        });
+        wrap.appendChild(label);
+        wrap.appendChild(resend);
+      }
+
+      if (getSentState()[order.name]) renderSent(); else renderUnsent();
+      return wrap;
+    }
+
     // Render orders
     function renderOrders(orders) {
       var tbody = document.getElementById('orders-body');
@@ -392,51 +496,9 @@
         tdSupplier.appendChild(cb);
         tr.appendChild(tdSupplier);
 
-        // Action button
+        // Action button (Send Inspection, or Sent + Re-send)
         var tdAction = document.createElement('td');
-        var btn = document.createElement('button');
-        btn.className = 'inspect-btn';
-
-        if (sentState[order.name]) {
-          btn.className = 'inspect-btn sent';
-          btn.textContent = 'Sent';
-          btn.disabled = true;
-        } else {
-          btn.textContent = 'Send Inspection';
-          btn.addEventListener('click', (function(o, b) {
-            return function() {
-              b.disabled = true;
-              b.textContent = 'Sending...';
-              fetch(WORKER_URL + '/api/inspect', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: o.email, order_number: o.name })
-              })
-              .then(function(r) { return r.json(); })
-              .then(function(data) {
-                if (data.success) {
-                  b.className = 'inspect-btn sent';
-                  b.textContent = 'Sent';
-                  var state = getSentState();
-                  state[o.name] = true;
-                  saveSentState(state);
-                  showStatus('Inspection email triggered for ' + o.name, 'success');
-                } else {
-                  b.disabled = false;
-                  b.textContent = 'Send Inspection';
-                  showStatus('Failed for ' + o.name + ': ' + (data.error || 'Unknown error'), 'error');
-                }
-              })
-              .catch(function(err) {
-                b.disabled = false;
-                b.textContent = 'Send Inspection';
-                showStatus('Failed for ' + o.name + ': ' + err.message, 'error');
-              });
-            };
-          })(order, btn));
-        }
-
-        tdAction.appendChild(btn);
+        tdAction.appendChild(buildActionControl(order));
         tr.appendChild(tdAction);
 
         tbody.appendChild(tr);
