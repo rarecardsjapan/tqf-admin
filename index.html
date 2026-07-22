@@ -394,23 +394,52 @@
   <script>
     // IMPORTANT: Replace this with your Cloudflare Worker URL after deploying
     var WORKER_URL = 'https://tqf-api.projects-kfb.workers.dev';
-    var PASSWORD = 'inspect';
     var ALL_ORDERS = [];
     var _toBuy = [], _toByDate = [];
 
-    // Password gate
+    // The dashboard password doubles as the API credential. It is typed at
+    // runtime and kept only in sessionStorage — never hardcoded in this file,
+    // which is public on GitHub Pages. Every Worker call carries it in the
+    // X-Dashboard-Auth header; the Worker rejects anything that doesn't match.
+    var DASH_PW = sessionStorage.getItem('tqf_pw') || '';
+    function authHeaders(extra) {
+      var h = extra || {};
+      h['X-Dashboard-Auth'] = DASH_PW;
+      return h;
+    }
+    // Wrong or expired password: drop the session and return to the gate.
+    function lockOut() {
+      DASH_PW = '';
+      sessionStorage.removeItem('tqf_pw');
+      document.getElementById('dashboard').style.display = 'none';
+      document.getElementById('gate').style.display = 'block';
+      document.getElementById('gate-error').style.display = 'block';
+      var rb = document.getElementById('refresh-btn');
+      if (rb) { rb.disabled = false; rb.textContent = 'Refresh Orders'; }
+    }
+
+    // Password gate. No client-side password check any more — we store whatever
+    // is typed and let the Worker be the judge (a bad password 401s in
+    // loadOrders, which calls lockOut and re-shows the gate with the error).
     document.getElementById('gate-btn').addEventListener('click', function() {
-      if (document.getElementById('gate-pw').value === PASSWORD) {
-        document.getElementById('gate').style.display = 'none';
-        document.getElementById('dashboard').style.display = 'block';
-        loadOrders();
-      } else {
-        document.getElementById('gate-error').style.display = 'block';
-      }
+      var pw = document.getElementById('gate-pw').value;
+      if (!pw) { document.getElementById('gate-error').style.display = 'block'; return; }
+      DASH_PW = pw;
+      sessionStorage.setItem('tqf_pw', pw);
+      document.getElementById('gate-error').style.display = 'none';
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      loadOrders();
     });
     document.getElementById('gate-pw').addEventListener('keydown', function(e) {
       if (e.key === 'Enter') document.getElementById('gate-btn').click();
     });
+    // Stay signed in across refreshes within the same browser session.
+    if (DASH_PW) {
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      loadOrders();
+    }
 
     // Status helper
     function showStatus(msg, type) {
@@ -426,9 +455,13 @@
       btn.textContent = 'Loading...';
       showStatus('Fetching orders from Shopify...', 'info');
 
-      fetch(WORKER_URL + '/api/orders')
-        .then(function(r) { return r.json(); })
+      fetch(WORKER_URL + '/api/orders', { headers: authHeaders() })
+        .then(function(r) {
+          if (r.status === 401) { lockOut(); return null; }
+          return r.json();
+        })
         .then(function(data) {
+          if (!data) return;
           if (data.error) {
             showStatus('Error: ' + data.error, 'error');
             btn.disabled = false;
@@ -480,10 +513,13 @@
       cb.disabled = true;
       return fetch(WORKER_URL + '/api/ordered', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ order_id: order.id, tags: order.tags || '', value: value })
       })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (r.status === 401) { lockOut(); return { success: false, error: 'Session expired — sign in again' }; }
+        return r.json();
+      })
       .then(function(data) {
         cb.disabled = false;
         if (data.success) {
@@ -530,7 +566,7 @@
       btn.textContent = busyLabel;
       return fetch(WORKER_URL + '/api/inspect', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({
           email: order.email,
           order_number: order.name,
@@ -538,7 +574,10 @@
           tags: order.tags || ''
         })
       })
-      .then(function(r) { return r.json(); })
+      .then(function(r) {
+        if (r.status === 401) { lockOut(); return { success: false, error: 'Session expired — sign in again' }; }
+        return r.json();
+      })
       .then(function(data) {
         if (data.success) {
           var state = getSentState();
