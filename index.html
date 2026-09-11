@@ -1124,7 +1124,7 @@
 
       var lines = document.createElement('div'); lines.className = 'alloc-lines';
       var orderLabel = (order.name || '').replace(/^#/, '');
-      var customerFirst = (order.customer_name || 'Guest').trim().split(/\s+/)[0];
+      var customerName = (order.customer_name || 'Guest').trim();
       alloc.lines.forEach(function(l) {
         var row = document.createElement('div');
         var have = l.received >= l.ordered;
@@ -1136,7 +1136,7 @@
         var to = document.createElement('span'); to.className = 'allocation-to';
         var arrow = document.createTextNode('→ ');
         var target = document.createElement('b'); target.textContent = orderLabel;
-        to.appendChild(arrow); to.appendChild(target); to.appendChild(document.createTextNode('  ' + customerFirst));
+        to.appendChild(arrow); to.appendChild(target); to.appendChild(document.createTextNode('  ' + customerName));
         var cnt = document.createElement('span'); cnt.className = 'cnt';
         cnt.textContent = have ? l.received + ' of ' + l.ordered : 'waiting  ' + l.received + ' of ' + l.ordered;
         row.appendChild(mark); row.appendChild(name); row.appendChild(to);
