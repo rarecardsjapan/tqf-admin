@@ -1083,7 +1083,7 @@
         var detail = document.createElement('td'); detail.className = 'detail-cell'; detail.textContent = details.detail || '—';
         var qtyCell = document.createElement('td'); qtyCell.className = 'qty-cell';
         var qty = document.createElement('input'); qty.type = 'number'; qty.className = 'recv-qty';
-        qty.min = '1'; qty.max = String(v.qty); qty.step = '1'; qty.disabled = true; qty.placeholder = '0';
+        qty.min = '1'; qty.max = '500'; qty.step = '1'; qty.disabled = true; qty.placeholder = '0';
         qty.setAttribute('aria-label', 'Quantity received for ' + row.dataset.label);
         qtyCell.appendChild(qty);
 
@@ -1097,7 +1097,7 @@
         });
         qty.addEventListener('input', function() {
           var n = parseInt(qty.value, 10);
-          if (n > v.qty) qty.value = String(v.qty);
+          if (n > 500) qty.value = '500';
           if (n < 1) qty.value = '1';
           updateRecvSelection();
         });
@@ -1273,15 +1273,19 @@
             return r.json();
           }).then(function(data) {
             if (data.error) throw new Error(entry.label + ': ' + data.error);
-            completed.push(entry);
+            completed.push({ variant_id: entry.variant_id, qty: entry.qty, label: entry.label, surplus: data.surplus || 0 });
             (data.allocated || []).forEach(function(a) { _flash[a.name] = true; });
           });
         });
       }, Promise.resolve())
       .then(function() {
         var units = completed.reduce(function(sum, entry) { return sum + entry.qty; }, 0);
+        var spare = completed.reduce(function(sum, entry) { return sum + entry.surplus; }, 0);
         btn.textContent = prev;
-        showStatus('Delivery saved: ' + completed.length + ' item' + (completed.length === 1 ? '' : 's') + ', ' + units + ' unit' + (units === 1 ? '' : 's') + ' allocated.', 'success');
+        var allocated = units - spare;
+        var message = 'Delivery saved: ' + allocated + ' unit' + (allocated === 1 ? '' : 's') + ' mapped to customer orders.';
+        if (spare > 0) message += ' ' + spare + ' extra unit' + (spare === 1 ? '' : 's') + ' not mapped, keep aside.';
+        showStatus(message, spare > 0 ? 'info' : 'success');
         loadOrders();
         setTimeout(function() { _flash = {}; }, 3000);
       })
