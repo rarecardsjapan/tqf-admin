@@ -1018,6 +1018,10 @@
       else items.push({ variant_id: entry.variant_id, label: entry.label, qty: entry.surplus });
       localStorage.setItem(UNALLOCATED_KEY, JSON.stringify({ day: todayHK(), items: items }));
     }
+    function saveUnallocatedToday(items) {
+      if (items.length) localStorage.setItem(UNALLOCATED_KEY, JSON.stringify({ day: todayHK(), items: items }));
+      else localStorage.removeItem(UNALLOCATED_KEY);
+    }
 
     // Received quantities on one order, keyed by line item id.
     function recvMap(order) {
@@ -1245,17 +1249,51 @@
 
       var unallocated = unallocatedToday();
       var ul = document.getElementById('unallocatedList'); ul.textContent = '';
-      unallocated.forEach(function(item) {
+      unallocated.forEach(function(item, index) {
         var row = document.createElement('div'); row.className = 'dayrow';
         var q = document.createElement('span'); q.className = 'q'; q.textContent = 'x' + item.qty;
         var name = document.createElement('span'); name.textContent = item.label;
         var note = document.createElement('span'); note.className = 'v'; note.textContent = 'Unallocated';
-        row.appendChild(q); row.appendChild(name); row.appendChild(note); ul.appendChild(row);
+        var edit = document.createElement('button'); edit.className = 'edit-receipt'; edit.textContent = 'Edit';
+        edit.setAttribute('aria-label', 'Edit unallocated quantity for ' + item.label);
+        edit.addEventListener('click', function() { showUnallocatedEditor(row, item, index); });
+        row.appendChild(q); row.appendChild(name); row.appendChild(note); row.appendChild(edit); ul.appendChild(row);
       });
       document.getElementById('sect-unallocated').style.display = unallocated.length ? 'block' : 'none';
 
       document.getElementById('recv-empty').style.display =
         (ready.length + holding.length + rows.length) === 0 ? 'block' : 'none';
+    }
+
+    function showUnallocatedEditor(row, item, index) {
+      var oldButton = row.querySelector('.edit-receipt');
+      if (oldButton) oldButton.remove();
+      var controls = document.createElement('span'); controls.className = 'edit-controls';
+      var qty = document.createElement('input'); qty.type = 'number'; qty.min = '0'; qty.max = '500'; qty.step = '1'; qty.value = String(item.qty);
+      qty.setAttribute('aria-label', 'Correct unallocated quantity');
+      var save = document.createElement('button'); save.className = 'save-edit'; save.textContent = 'Save';
+      var cancel = document.createElement('button'); cancel.textContent = 'Cancel';
+      controls.appendChild(qty); controls.appendChild(save); controls.appendChild(cancel); row.appendChild(controls);
+      qty.focus(); qty.select();
+
+      cancel.addEventListener('click', function() { renderReceiving(); });
+      save.addEventListener('click', function() {
+        var corrected = parseInt(qty.value, 10);
+        if (!Number.isInteger(corrected) || corrected < 0 || corrected > 500) {
+          showStatus('Enter a quantity from 0 to 500. Use 0 to remove it.', 'error');
+          return;
+        }
+        var items = unallocatedToday();
+        if (!items[index] || items[index].variant_id !== item.variant_id) {
+          showStatus('This unallocated item changed. Refresh and try again.', 'error');
+          return;
+        }
+        if (corrected === 0) items.splice(index, 1);
+        else items[index].qty = corrected;
+        saveUnallocatedToday(items);
+        showStatus(corrected === 0 ? 'Unallocated item removed.' : 'Unallocated quantity corrected to ' + corrected + '.', 'success');
+        renderReceiving();
+      });
     }
 
     function showReceiptEditor(row, receipt) {
