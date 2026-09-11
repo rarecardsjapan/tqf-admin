@@ -326,7 +326,12 @@
     .recv-table tbody tr:last-child td { border-bottom: none; }
     .recv-table tbody tr.is-selected td { background: #f3f7f0; }
     .recv-table .check-cell { width: 44px; text-align: center; }
-    .recv-table .product-cell { min-width: 260px; font-weight: 600; }
+    .recv-table .product-cell { min-width: 300px; font-weight: 600; }
+    .recv-product { display: flex; align-items: center; gap: 0.75rem; }
+    .recv-thumb { display: flex; flex: 0 0 52px; align-items: center; justify-content: center; width: 52px; height: 52px; border: 1px solid #e5e0d8; background: #fff; }
+    .recv-thumb img { display: block; width: 48px; height: 48px; object-fit: contain; }
+    .recv-thumb:hover { border-color: #81796f; }
+    .recv-no-image { flex: 0 0 52px; width: 52px; height: 52px; background: #f5f2ed; border: 1px solid #ebe6de; }
     .recv-table .detail-cell { min-width: 140px; color: #514d47; }
     .recv-table .qty-cell { width: 130px; }
     .recv-check { width: 20px; height: 20px; accent-color: #263f2a; cursor: pointer; }
@@ -1048,7 +1053,7 @@
           var short = it.quantity - got;
           if (short <= 0) return;
           var k = String(it.variant_id);
-          if (!map[k]) map[k] = { variant_id: it.variant_id, title: it.title, variant: it.variant || '', qty: 0, since: o.created_at };
+          if (!map[k]) map[k] = { variant_id: it.variant_id, title: it.title, variant: it.variant || '', image: it.image || null, product_url: it.product_url || null, qty: 0, since: o.created_at };
           map[k].qty += short;
           if (new Date(o.created_at) < new Date(map[k].since)) map[k].since = o.created_at;
         });
@@ -1104,7 +1109,17 @@
         check.setAttribute('aria-label', 'Received ' + row.dataset.label);
         checkCell.appendChild(check);
 
-        var product = document.createElement('td'); product.className = 'product-cell'; product.textContent = v.title;
+        var product = document.createElement('td'); product.className = 'product-cell';
+        var productWrap = document.createElement('div'); productWrap.className = 'recv-product';
+        if (v.image) {
+          var imageLink = document.createElement('a'); imageLink.className = 'recv-thumb'; imageLink.href = v.image;
+          imageLink.target = '_blank'; imageLink.rel = 'noopener'; imageLink.title = 'Open full product image';
+          var image = document.createElement('img'); image.src = v.image; image.alt = v.title + (v.variant ? ', ' + v.variant : ''); image.loading = 'lazy';
+          imageLink.appendChild(image); productWrap.appendChild(imageLink);
+        } else {
+          var noImage = document.createElement('span'); noImage.className = 'recv-no-image'; noImage.setAttribute('aria-hidden', 'true'); productWrap.appendChild(noImage);
+        }
+        var productName = document.createElement('span'); productName.textContent = v.title; productWrap.appendChild(productName); product.appendChild(productWrap);
         var colour = document.createElement('td'); colour.className = 'detail-cell'; colour.textContent = details.colour || '—';
         var detail = document.createElement('td'); detail.className = 'detail-cell'; detail.textContent = details.detail || '—';
         var qtyCell = document.createElement('td'); qtyCell.className = 'qty-cell';
