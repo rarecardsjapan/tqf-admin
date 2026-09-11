@@ -305,6 +305,12 @@
     .dayrow:last-child { border-bottom: none; }
     .dayrow .q { min-width: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .dayrow .v { color: #6f6a62; }
+    .dayrow .edit-receipt { margin-left: auto; border: 1px solid #d8d2c9; background: #fff; color: #514d47; padding: 0.35rem 0.65rem; font: inherit; font-size: 0.72rem; cursor: pointer; }
+    .dayrow .edit-receipt:hover { border-color: #81796f; color: #1a1a1a; }
+    .dayrow .edit-controls { display: flex; align-items: center; gap: 0.4rem; margin-left: auto; }
+    .dayrow .edit-controls input { width: 58px; padding: 0.35rem; border: 1px solid #d8d2c9; font: inherit; text-align: center; }
+    .dayrow .edit-controls button { border: 0; background: transparent; color: #514d47; padding: 0.35rem; font: inherit; font-size: 0.72rem; cursor: pointer; }
+    .dayrow .edit-controls .save-edit { background: #1a1a1a; color: #fff; padding-inline: 0.65rem; }
 
     /* Receiving */
     .recv-entry { background: #fff; border: 1px solid #e0dbd2; margin-bottom: 1.75rem; }
@@ -997,7 +1003,7 @@
       var lines = (order.items || []).map(function(it) {
         var rec = map[String(it.id)];
         return {
-          title: it.title, variant: it.variant || '', ordered: it.quantity,
+          id: it.id, title: it.title, variant: it.variant || '', ordered: it.quantity,
           received: rec ? rec.qty : 0, day: rec ? rec.day : null
         };
       });
@@ -1176,7 +1182,7 @@
       var today = todayHK(), rows = [], units = 0;
       ALL_ORDERS.forEach(function(o) {
         allocOf(o).lines.forEach(function(l) {
-          if (l.day === today && l.received > 0) { rows.push({ order: o.name, line: l }); units += l.received; }
+          if (l.day === today && l.received > 0) { rows.push({ order: o, line: l }); units += l.received; }
         });
       });
       var tl = document.getElementById('todayList'); tl.textContent = '';
@@ -1187,8 +1193,11 @@
         var v = document.createElement('span'); v.className = 'v';
         v.textContent = r.line.variant ? '(' + r.line.variant + ')' : '';
         var to = document.createElement('span'); to.className = 'v';
-        to.textContent = '→ ' + r.order;
-        row.appendChild(q); row.appendChild(name); row.appendChild(v); row.appendChild(to);
+        to.textContent = '→ ' + r.order.name;
+        var edit = document.createElement('button'); edit.className = 'edit-receipt'; edit.textContent = 'Edit';
+        edit.setAttribute('aria-label', 'Edit receipt for ' + r.line.title + ' on ' + r.order.name);
+        edit.addEventListener('click', function() { showReceiptEditor(row, r); });
+        row.appendChild(q); row.appendChild(name); row.appendChild(v); row.appendChild(to); row.appendChild(edit);
         tl.appendChild(row);
       });
       document.getElementById('sect-today').style.display = rows.length ? 'block' : 'none';
@@ -1197,6 +1206,44 @@
 
       document.getElementById('recv-empty').style.display =
         (ready.length + holding.length + rows.length) === 0 ? 'block' : 'none';
+    }
+
+    function showReceiptEditor(row, receipt) {
+      var oldButton = row.querySelector('.edit-receipt');
+      if (oldButton) oldButton.remove();
+      var controls = document.createElement('span'); controls.className = 'edit-controls';
+      var qty = document.createElement('input'); qty.type = 'number'; qty.min = '0'; qty.max = String(receipt.line.ordered); qty.step = '1'; qty.value = String(receipt.line.received);
+      qty.setAttribute('aria-label', 'Correct received quantity');
+      var save = document.createElement('button'); save.className = 'save-edit'; save.textContent = 'Save';
+      var cancel = document.createElement('button'); cancel.textContent = 'Cancel';
+      controls.appendChild(qty); controls.appendChild(save); controls.appendChild(cancel); row.appendChild(controls);
+      qty.focus(); qty.select();
+
+      cancel.addEventListener('click', function() { renderReceiving(); });
+      save.addEventListener('click', function() {
+        var corrected = parseInt(qty.value, 10);
+        if (!Number.isInteger(corrected) || corrected < 0 || corrected > receipt.line.ordered) {
+          showStatus('Enter a quantity from 0 to ' + receipt.line.ordered + '. Use 0 to undo.', 'error');
+          return;
+        }
+        save.disabled = true; cancel.disabled = true; save.textContent = 'Saving...';
+        fetch(WORKER_URL + '/api/receive-adjust', {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ order_id: receipt.order.id, line_item_id: receipt.line.id, qty: corrected })
+        })
+        .then(function(r) { if (r.status === 401) { lockOut(); return null; } return r.json(); })
+        .then(function(data) {
+          if (!data) return;
+          if (data.error) throw new Error(data.error);
+          showStatus(corrected === 0 ? 'Receipt undone. The item is outstanding again.' : 'Received quantity corrected to ' + corrected + '.', 'success');
+          loadOrders();
+        })
+        .catch(function(err) {
+          save.disabled = false; cancel.disabled = false; save.textContent = 'Save';
+          showStatus('Correction failed: ' + err.message, 'error');
+        });
+      });
     }
 
     document.getElementById('recv-search').addEventListener('input', function() {
