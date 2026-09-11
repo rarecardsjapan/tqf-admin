@@ -346,21 +346,19 @@
     .sect h2 { font-family: Georgia, serif; font-size: 1.05rem; font-weight: 400; margin-bottom: 0.15rem; }
     .sect .hint { font-size: 0.8rem; color: #999; margin-bottom: 0.85rem; }
 
-    /* Allocation cards */
-    .alloc { background: #fff; border: 1px solid #e0dbd2; border-left: 3px solid #e0dbd2; margin-bottom: 0.6rem; padding: 0.85rem 1rem; }
-    .alloc.ready { border-left-color: #2e7d32; }
-    .alloc.holding { border-left-color: #c47f17; }
+    /* Compact allocation rows */
+    .alloc-list { background: #fff; border: 1px solid #e0dbd2; }
+    .alloc { display: grid; grid-template-columns: minmax(190px, 0.7fr) minmax(320px, 2fr) auto; gap: 1rem; align-items: start; padding: 0.75rem 1rem; border-bottom: 1px solid #eeeae4; }
+    .alloc:last-child { border-bottom: none; }
     .alloc.flash { animation: allocflash 2.4s ease-out; }
     @keyframes allocflash { from { background: #fbf4e0; } to { background: #fff; } }
-    .alloc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.45rem; }
-    .alloc-who { font-size: 0.9rem; }
+    .alloc-head { min-width: 0; }
+    .alloc-who { display: flex; gap: 0.45rem; align-items: baseline; min-width: 0; font-size: 0.86rem; }
     .alloc-who b { font-weight: 600; }
-    .alloc-who .cust { color: #6f6a62; margin-left: 0.5rem; }
-    .alloc-when { font-size: 0.78rem; color: #999; white-space: nowrap; margin-left: 0.6rem; }
-    .pill { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 0.2rem 0.5rem; white-space: nowrap; }
-    .pill.ready { background: #e8f5e9; color: #2e7d32; }
-    .pill.holding { background: #fdf3e2; color: #a06510; }
-    .alloc-line { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.85rem; padding: 0.18rem 0; }
+    .alloc-who .cust { color: #6f6a62; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .alloc-when { font-size: 0.75rem; color: #999; white-space: nowrap; padding-top: 0.12rem; }
+    .alloc-lines { min-width: 0; }
+    .alloc-line { display: flex; gap: 0.55rem; align-items: baseline; font-size: 0.84rem; padding: 0.08rem 0; }
     .alloc-line .mark { width: 0.9rem; flex: none; }
     .alloc-line.have .mark { color: #2e7d32; }
     .alloc-line.want { color: #a06510; }
@@ -381,6 +379,8 @@
       .orders-table th, .orders-table td { padding: 10px 12px; }
       .recv-entry-head { align-items: stretch; flex-direction: column; }
       .recv-search { max-width: none; width: 100%; box-sizing: border-box; }
+      .alloc { grid-template-columns: 1fr; gap: 0.35rem; }
+      .alloc-when { padding-left: 1.45rem; }
     }
   </style>
 </head>
@@ -478,13 +478,13 @@
       <div class="sect" id="sect-ready" style="display:none;">
         <h2>Ready to pack</h2>
         <p class="hint">Every piece on these orders has arrived. Pack and fulfil in Shopify as normal.</p>
-        <div id="readyList"></div>
+        <div class="alloc-list" id="readyList"></div>
       </div>
 
       <div class="sect" id="sect-holding" style="display:none;">
         <h2>Holding</h2>
         <p class="hint">Part of the order has arrived. Keep these pieces aside for the customer. Do not ship yet.</p>
-        <div id="holdingList"></div>
+        <div class="alloc-list" id="holdingList"></div>
       </div>
 
       <div class="sect" id="sect-today" style="display:none;">
@@ -1116,7 +1116,7 @@
       updateRecvSelection();
     }
 
-    // One order rendered as a card: who it is for and what is in or missing.
+    // One order rendered as a compact row: order/customer, items, then date.
     function allocCard(order, alloc) {
       var box = document.createElement('div');
       box.className = 'alloc ' + alloc.status + (_flash[order.name] ? ' flash' : '');
@@ -1128,16 +1128,12 @@
       cust.textContent = order.customer_name || 'Guest';
       who.appendChild(num); who.appendChild(cust);
 
-      var right = document.createElement('div');
-      var pill = document.createElement('span'); pill.className = 'pill ' + alloc.status;
-      pill.textContent = alloc.status === 'ready' ? 'Ready to pack' : 'Holding';
       var when = document.createElement('span'); when.className = 'alloc-when';
       when.textContent = 'ordered ' + fmtDay(order.created_at);
-      right.appendChild(pill); right.appendChild(when);
-
-      head.appendChild(who); head.appendChild(right);
+      head.appendChild(who);
       box.appendChild(head);
 
+      var lines = document.createElement('div'); lines.className = 'alloc-lines';
       alloc.lines.forEach(function(l) {
         var row = document.createElement('div');
         var have = l.received >= l.ordered;
@@ -1149,8 +1145,10 @@
         var cnt = document.createElement('span'); cnt.className = 'cnt';
         cnt.textContent = have ? l.received + ' of ' + l.ordered : 'waiting  ' + l.received + ' of ' + l.ordered;
         row.appendChild(mark); row.appendChild(name); row.appendChild(cnt);
-        box.appendChild(row);
+        lines.appendChild(row);
       });
+      box.appendChild(lines);
+      box.appendChild(when);
       return box;
     }
 
