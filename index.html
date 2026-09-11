@@ -1284,7 +1284,7 @@
         btn.textContent = prev;
         var allocated = units - spare;
         var message = 'Delivery saved: ' + allocated + ' unit' + (allocated === 1 ? '' : 's') + ' mapped to customer orders.';
-        if (spare > 0) message += ' ' + spare + ' extra unit' + (spare === 1 ? '' : 's') + ' not mapped, keep aside.';
+        if (spare > 0) message += ' ' + spare + ' extra unit' + (spare === 1 ? '' : 's') + ': no outstanding order. Keep aside.';
         showStatus(message, spare > 0 ? 'info' : 'success');
         loadOrders();
         setTimeout(function() { _flash = {}; }, 3000);
