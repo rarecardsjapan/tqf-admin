@@ -306,6 +306,47 @@
     .dayrow .q { min-width: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
     .dayrow .v { color: #6f6a62; }
 
+    /* Receiving */
+    .recvbar { display: flex; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap; background: #fff; border: 1px solid #e0dbd2; padding: 1rem; margin-bottom: 1.75rem; }
+    .recvbar label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #999; margin-bottom: 0.35rem; }
+    .recvbar select, .recvbar input {
+      font-family: inherit; font-size: 0.9rem; padding: 0.55rem 0.6rem;
+      border: 1px solid #e0dbd2; background: #fff; color: #1a1a1a; outline: none;
+    }
+    .recvbar select { min-width: 340px; max-width: 100%; }
+    .recvbar input { width: 84px; text-align: center; font-variant-numeric: tabular-nums; }
+    .recvbar select:focus, .recvbar input:focus { border-color: #8a8579; }
+    .recv-btn {
+      padding: 0.6rem 1.5rem; background: #1a1a1a; color: #f5f0eb; border: none; font-family: inherit;
+      font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer;
+    }
+    .recv-btn:hover { opacity: 0.85; }
+    .recv-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .sect { margin-bottom: 2rem; }
+    .sect h2 { font-family: Georgia, serif; font-size: 1.05rem; font-weight: 400; margin-bottom: 0.15rem; }
+    .sect .hint { font-size: 0.8rem; color: #999; margin-bottom: 0.85rem; }
+
+    /* Allocation cards */
+    .alloc { background: #fff; border: 1px solid #e0dbd2; border-left: 3px solid #e0dbd2; margin-bottom: 0.6rem; padding: 0.85rem 1rem; }
+    .alloc.ready { border-left-color: #2e7d32; }
+    .alloc.holding { border-left-color: #c47f17; }
+    .alloc.flash { animation: allocflash 2.4s ease-out; }
+    @keyframes allocflash { from { background: #fbf4e0; } to { background: #fff; } }
+    .alloc-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.45rem; }
+    .alloc-who { font-size: 0.9rem; }
+    .alloc-who b { font-weight: 600; }
+    .alloc-who .cust { color: #6f6a62; margin-left: 0.5rem; }
+    .alloc-when { font-size: 0.78rem; color: #999; white-space: nowrap; margin-left: 0.6rem; }
+    .pill { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; padding: 0.2rem 0.5rem; white-space: nowrap; }
+    .pill.ready { background: #e8f5e9; color: #2e7d32; }
+    .pill.holding { background: #fdf3e2; color: #a06510; }
+    .alloc-line { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.85rem; padding: 0.18rem 0; }
+    .alloc-line .mark { width: 0.9rem; flex: none; }
+    .alloc-line.have .mark { color: #2e7d32; }
+    .alloc-line.want { color: #a06510; }
+    .alloc-line .cnt { margin-left: auto; color: #999; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
     /* Empty state */
     .empty-state {
       text-align: center;
@@ -347,6 +388,7 @@
     <div class="viewtabs" id="viewtabs">
       <button data-view="orders" class="active">Orders</button>
       <button data-view="toorder">To Order</button>
+      <button data-view="receiving">Receiving</button>
     </div>
 
     <!-- Orders panel -->
@@ -388,6 +430,41 @@
       </div>
       <div id="sub-date" style="display:none;"></div>
       <div class="empty-state" id="toorder-empty" style="display:none;">Nothing to order — all caught up.</div>
+    </div>
+
+    <!-- Receiving panel: log what arrived, see which order each unit goes to -->
+    <div class="panel" id="panel-receiving">
+      <div class="recvbar">
+        <div>
+          <label for="recv-variant">What arrived</label>
+          <select id="recv-variant"></select>
+        </div>
+        <div>
+          <label for="recv-qty">How many</label>
+          <input type="number" id="recv-qty" min="1" step="1" value="1" />
+        </div>
+        <button class="recv-btn" id="recv-btn">Receive</button>
+      </div>
+
+      <div class="sect" id="sect-ready" style="display:none;">
+        <h2>Ready to pack</h2>
+        <p class="hint">Every piece on these orders has arrived. Pack and fulfil in Shopify as normal.</p>
+        <div id="readyList"></div>
+      </div>
+
+      <div class="sect" id="sect-holding" style="display:none;">
+        <h2>Holding</h2>
+        <p class="hint">Part of the order has arrived. Keep these pieces aside for the customer. Do not ship yet.</p>
+        <div id="holdingList"></div>
+      </div>
+
+      <div class="sect" id="sect-today" style="display:none;">
+        <h2>Received today</h2>
+        <p class="hint" id="today-hint"></p>
+        <div class="daygroup" id="todayList"></div>
+      </div>
+
+      <div class="empty-state" id="recv-empty" style="display:none;">Nothing received yet. Log what arrived above.</div>
     </div>
   </div>
 
@@ -471,6 +548,7 @@
           ALL_ORDERS = data.orders || [];
           renderOrders(ALL_ORDERS);
           renderToOrder();
+          renderReceiving();
           showStatus(data.orders.length + ' unfulfilled order(s) loaded.', 'success');
           btn.disabled = false;
           btn.textContent = 'Refresh Orders';
@@ -865,14 +943,233 @@
       document.getElementById('sub-date').style.display = (!empty && sub === 'date') ? 'block' : 'none';
     }
 
+    // ---- Receiving & allocation ----
+    // Shared state lives in Shopify order tags: recv:<line_item_id>:<qty>:<YYYYMMDD>
+    // The tag is the ledger, so a unit already assigned is never assigned again,
+    // and the warehouse person and Rachelle see the same picture on any device.
+    var RECV_RE = /^recv:(\d+):(\d+):(\d{8})$/i;
+    var _flash = {};
+
+    // Day stamp in Hong Kong time, matching the Worker, so "today" is the warehouse day.
+    function todayHK() {
+      var t = new Date(Date.now() + 8 * 3600 * 1000);
+      var p = function(n) { return (n < 10 ? '0' : '') + n; };
+      return '' + t.getUTCFullYear() + p(t.getUTCMonth() + 1) + p(t.getUTCDate());
+    }
+
+    // Received quantities on one order, keyed by line item id.
+    function recvMap(order) {
+      var map = {};
+      (order.tags || '').split(',').forEach(function(t) {
+        var m = RECV_RE.exec(t.trim());
+        if (m) map[m[1]] = { qty: parseInt(m[2], 10), day: m[3] };
+      });
+      return map;
+    }
+
+    // Classify an order: ready (everything in), holding (some in), none.
+    function allocOf(order) {
+      var map = recvMap(order);
+      var lines = (order.items || []).map(function(it) {
+        var rec = map[String(it.id)];
+        return {
+          title: it.title, variant: it.variant || '', ordered: it.quantity,
+          received: rec ? rec.qty : 0, day: rec ? rec.day : null
+        };
+      });
+      var anyIn = lines.some(function(l) { return l.received > 0; });
+      var allIn = lines.length > 0 && lines.every(function(l) { return l.received >= l.ordered; });
+      return { lines: lines, status: allIn ? 'ready' : (anyIn ? 'holding' : 'none') };
+    }
+
+    // Variants still owed to a customer, longest-waiting first.
+    function outstandingVariants(orders) {
+      var map = {};
+      orders.forEach(function(o) {
+        var r = recvMap(o);
+        (o.items || []).forEach(function(it) {
+          if (!it.variant_id) return;
+          var got = r[String(it.id)] ? r[String(it.id)].qty : 0;
+          var short = it.quantity - got;
+          if (short <= 0) return;
+          var k = String(it.variant_id);
+          if (!map[k]) map[k] = { variant_id: it.variant_id, title: it.title, variant: it.variant || '', qty: 0, since: o.created_at };
+          map[k].qty += short;
+          if (new Date(o.created_at) < new Date(map[k].since)) map[k].since = o.created_at;
+        });
+      });
+      return Object.keys(map).map(function(k) { return map[k]; }).sort(function(a, b) {
+        var d = new Date(a.since) - new Date(b.since);
+        return d !== 0 ? d : a.title.localeCompare(b.title);
+      });
+    }
+
+    // One order rendered as a card: who it is for and what is in or missing.
+    function allocCard(order, alloc) {
+      var box = document.createElement('div');
+      box.className = 'alloc ' + alloc.status + (_flash[order.name] ? ' flash' : '');
+
+      var head = document.createElement('div'); head.className = 'alloc-head';
+      var who = document.createElement('div'); who.className = 'alloc-who';
+      var num = document.createElement('b'); num.textContent = order.name;
+      var cust = document.createElement('span'); cust.className = 'cust';
+      cust.textContent = order.customer_name || 'Guest';
+      who.appendChild(num); who.appendChild(cust);
+
+      var right = document.createElement('div');
+      var pill = document.createElement('span'); pill.className = 'pill ' + alloc.status;
+      pill.textContent = alloc.status === 'ready' ? 'Ready to pack' : 'Holding';
+      var when = document.createElement('span'); when.className = 'alloc-when';
+      when.textContent = 'ordered ' + fmtDay(order.created_at);
+      right.appendChild(pill); right.appendChild(when);
+
+      head.appendChild(who); head.appendChild(right);
+      box.appendChild(head);
+
+      alloc.lines.forEach(function(l) {
+        var row = document.createElement('div');
+        var have = l.received >= l.ordered;
+        row.className = 'alloc-line ' + (have ? 'have' : 'want');
+        var mark = document.createElement('span'); mark.className = 'mark';
+        mark.textContent = have ? '✓' : '•';
+        var name = document.createElement('span');
+        name.textContent = l.title + (l.variant ? ' (' + l.variant + ')' : '');
+        var cnt = document.createElement('span'); cnt.className = 'cnt';
+        cnt.textContent = have ? l.received + ' of ' + l.ordered : 'waiting  ' + l.received + ' of ' + l.ordered;
+        row.appendChild(mark); row.appendChild(name); row.appendChild(cnt);
+        box.appendChild(row);
+      });
+      return box;
+    }
+
+    function renderReceiving() {
+      // What can be received: only variants an unfulfilled order is still waiting on.
+      var sel = document.getElementById('recv-variant');
+      var prev = sel.value;
+      sel.textContent = '';
+      var opts = outstandingVariants(ALL_ORDERS);
+      if (opts.length === 0) {
+        var none = document.createElement('option');
+        none.value = ''; none.textContent = 'Nothing outstanding';
+        sel.appendChild(none);
+      }
+      opts.forEach(function(v) {
+        var op = document.createElement('option');
+        op.value = String(v.variant_id);
+        op.textContent = v.title + (v.variant ? ' (' + v.variant + ')' : '') +
+          '  —  ' + v.qty + ' waiting since ' + fmtDay(v.since);
+        sel.appendChild(op);
+      });
+      if (prev) { sel.value = prev; if (!sel.value) sel.selectedIndex = 0; }
+      document.getElementById('recv-btn').disabled = opts.length === 0;
+
+      // Pick list: ready on top, holding below, each oldest first.
+      var ready = [], holding = [];
+      ALL_ORDERS.forEach(function(o) {
+        var a = allocOf(o);
+        if (a.status === 'ready') ready.push([o, a]);
+        else if (a.status === 'holding') holding.push([o, a]);
+      });
+      var byDate = function(x, y) { return new Date(x[0].created_at) - new Date(y[0].created_at); };
+      ready.sort(byDate); holding.sort(byDate);
+
+      var rl = document.getElementById('readyList'); rl.textContent = '';
+      ready.forEach(function(pair) { rl.appendChild(allocCard(pair[0], pair[1])); });
+      var hl = document.getElementById('holdingList'); hl.textContent = '';
+      holding.forEach(function(pair) { hl.appendChild(allocCard(pair[0], pair[1])); });
+
+      document.getElementById('sect-ready').style.display = ready.length ? 'block' : 'none';
+      document.getElementById('sect-holding').style.display = holding.length ? 'block' : 'none';
+
+      // Received today, read straight off the date in the tag.
+      var today = todayHK(), rows = [], units = 0;
+      ALL_ORDERS.forEach(function(o) {
+        allocOf(o).lines.forEach(function(l) {
+          if (l.day === today && l.received > 0) { rows.push({ order: o.name, line: l }); units += l.received; }
+        });
+      });
+      var tl = document.getElementById('todayList'); tl.textContent = '';
+      rows.forEach(function(r) {
+        var row = document.createElement('div'); row.className = 'dayrow';
+        var q = document.createElement('span'); q.className = 'q'; q.textContent = 'x' + r.line.received;
+        var name = document.createElement('span'); name.textContent = r.line.title;
+        var v = document.createElement('span'); v.className = 'v';
+        v.textContent = r.line.variant ? '(' + r.line.variant + ')' : '';
+        var to = document.createElement('span'); to.className = 'v';
+        to.textContent = '→ ' + r.order;
+        row.appendChild(q); row.appendChild(name); row.appendChild(v); row.appendChild(to);
+        tl.appendChild(row);
+      });
+      document.getElementById('sect-today').style.display = rows.length ? 'block' : 'none';
+      document.getElementById('today-hint').textContent =
+        units + ' unit' + (units === 1 ? '' : 's') + ' logged today.';
+
+      document.getElementById('recv-empty').style.display =
+        (ready.length + holding.length + rows.length) === 0 ? 'block' : 'none';
+    }
+
+    // Log a receipt. The Worker assigns the units and the pick list redraws here.
+    document.getElementById('recv-btn').addEventListener('click', function() {
+      var btn = this;
+      var sel = document.getElementById('recv-variant');
+      var qtyEl = document.getElementById('recv-qty');
+      var variantId = sel.value;
+      var qty = parseInt(qtyEl.value, 10);
+
+      if (!variantId) { showStatus('Pick what arrived first.', 'error'); return; }
+      if (!(qty >= 1)) { showStatus('Enter how many units arrived.', 'error'); return; }
+
+      var label = sel.options[sel.selectedIndex].textContent.split('  —  ')[0];
+      var prev = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Saving...';
+
+      fetch(WORKER_URL + '/api/receive', {
+        method: 'POST',
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ variant_id: variantId, qty: qty })
+      })
+      .then(function(r) { if (r.status === 401) { lockOut(); return null; } return r.json(); })
+      .then(function(data) {
+        btn.disabled = false; btn.textContent = prev;
+        if (!data) return;
+        if (data.error) { showStatus('Receive failed: ' + data.error, 'error'); return; }
+
+        _flash = {};
+        (data.allocated || []).forEach(function(a) { _flash[a.name] = true; });
+
+        var parts = (data.allocated || []).map(function(a) {
+          var n = a.filled.reduce(function(sum, f) { return sum + f.took; }, 0);
+          return n + ' to ' + a.name + (a.status === 'ready' ? ' (ready to pack)' : ' (holding)');
+        });
+        var msg = parts.length
+          ? qty + 'x ' + label + ' received. Assigned ' + parts.join(', ') + '.'
+          : qty + 'x ' + label + ' received. No order was waiting for it.';
+        if (data.surplus > 0) {
+          msg += ' ' + data.surplus + ' spare unit' + (data.surplus === 1 ? '' : 's') +
+                 ' with no order waiting, keep aside.';
+        }
+        showStatus(msg, parts.length ? 'success' : 'info');
+
+        qtyEl.value = 1;
+        loadOrders();
+        setTimeout(function() { _flash = {}; }, 3000);
+      })
+      .catch(function(err) {
+        btn.disabled = false; btn.textContent = prev;
+        showStatus('Receive failed: ' + err.message, 'error');
+      });
+    });
+
     // View toggle (Orders / To Order)
     document.querySelectorAll('.viewtabs button').forEach(function(b) {
       b.addEventListener('click', function() {
         document.querySelectorAll('.viewtabs button').forEach(function(x) { x.classList.remove('active'); });
         b.classList.add('active');
-        document.getElementById('panel-orders').classList.toggle('active', b.dataset.view === 'orders');
-        document.getElementById('panel-toorder').classList.toggle('active', b.dataset.view === 'toorder');
+        ['orders', 'toorder', 'receiving'].forEach(function(v) {
+          document.getElementById('panel-' + v).classList.toggle('active', b.dataset.view === v);
+        });
         if (b.dataset.view === 'toorder') renderToOrder();
+        if (b.dataset.view === 'receiving') renderReceiving();
       });
     });
 
