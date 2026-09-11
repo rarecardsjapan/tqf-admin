@@ -413,13 +413,13 @@
     <div class="status-bar" id="status-bar"></div>
 
     <div class="viewtabs" id="viewtabs">
-      <button data-view="orders" class="active">Orders</button>
+      <button data-view="orders">Orders</button>
       <button data-view="toorder">To Order</button>
-      <button data-view="receiving">Receiving</button>
+      <button data-view="receiving" class="active">Receiving</button>
     </div>
 
     <!-- Orders panel -->
-    <div class="panel active" id="panel-orders">
+    <div class="panel" id="panel-orders">
       <table class="orders-table" id="orders-table">
         <thead>
           <tr>
@@ -460,7 +460,7 @@
     </div>
 
     <!-- Receiving panel: log what arrived, see which order each unit goes to -->
-    <div class="panel" id="panel-receiving">
+    <div class="panel active" id="panel-receiving">
       <div class="recv-entry" id="recv-entry">
         <div class="recv-entry-head">
           <div>
@@ -1394,6 +1394,14 @@
     // View toggle (Orders / To Order)
     document.querySelectorAll('.viewtabs button').forEach(function(b) {
       b.addEventListener('click', function() {
+        if (b.dataset.view === 'orders' && sessionStorage.getItem('tqe_orders_unlocked') !== 'yes') {
+          var pin = window.prompt('Enter the Orders PIN');
+          if (pin !== 'tqe') {
+            if (pin !== null) showStatus('Incorrect Orders PIN.', 'error');
+            return;
+          }
+          sessionStorage.setItem('tqe_orders_unlocked', 'yes');
+        }
         document.querySelectorAll('.viewtabs button').forEach(function(x) { x.classList.remove('active'); });
         b.classList.add('active');
         ['orders', 'toorder', 'receiving'].forEach(function(v) {
