@@ -492,6 +492,12 @@
         <div class="daygroup" id="todayList"></div>
       </div>
 
+      <div class="sect" id="sect-unallocated" style="display:none;">
+        <h2>Unallocated today</h2>
+        <p class="hint">No outstanding customer order. Keep these units aside.</p>
+        <div class="daygroup" id="unallocatedList"></div>
+      </div>
+
       <div class="empty-state" id="recv-empty" style="display:none;">Nothing received yet. Log what arrived above.</div>
     </div>
   </div>
@@ -554,7 +560,7 @@
     }
 
     // Load orders
-    function loadOrders() {
+    function loadOrders(finalStatus) {
       var btn = document.getElementById('refresh-btn');
       btn.disabled = true;
       btn.textContent = 'Loading...';
@@ -577,7 +583,7 @@
           renderOrders(ALL_ORDERS);
           renderToOrder();
           renderReceiving();
-          showStatus(data.orders.length + ' unfulfilled order(s) loaded.', 'success');
+          showStatus(finalStatus ? finalStatus.message : data.orders.length + ' unfulfilled order(s) loaded.', finalStatus ? finalStatus.type : 'success');
           btn.disabled = false;
           btn.textContent = 'Refresh Orders';
         })
@@ -986,6 +992,26 @@
       return '' + t.getUTCFullYear() + p(t.getUTCMonth() + 1) + p(t.getUTCDate());
     }
 
+    // Day-only record of units that had no customer order to map to. This is a
+    // warehouse note, not inventory. It expires automatically on the next HK day.
+    var UNALLOCATED_KEY = 'tqe_unallocated_today';
+    function unallocatedToday() {
+      try {
+        var saved = JSON.parse(localStorage.getItem(UNALLOCATED_KEY) || '{}');
+        if (saved.day === todayHK() && Array.isArray(saved.items)) return saved.items;
+      } catch (e) {}
+      localStorage.removeItem(UNALLOCATED_KEY);
+      return [];
+    }
+    function addUnallocatedToday(entry) {
+      if (!entry.surplus) return;
+      var items = unallocatedToday();
+      var existing = items.find(function(x) { return x.variant_id === entry.variant_id; });
+      if (existing) existing.qty += entry.surplus;
+      else items.push({ variant_id: entry.variant_id, label: entry.label, qty: entry.surplus });
+      localStorage.setItem(UNALLOCATED_KEY, JSON.stringify({ day: todayHK(), items: items }));
+    }
+
     // Received quantities on one order, keyed by line item id.
     function recvMap(order) {
       var map = {};
@@ -1196,7 +1222,18 @@
       });
       document.getElementById('sect-today').style.display = rows.length ? 'block' : 'none';
       document.getElementById('today-hint').textContent =
-        units + ' unit' + (units === 1 ? '' : 's') + ' logged today.';
+        units + ' unit' + (units === 1 ? '' : 's') + ' allocated today.';
+
+      var unallocated = unallocatedToday();
+      var ul = document.getElementById('unallocatedList'); ul.textContent = '';
+      unallocated.forEach(function(item) {
+        var row = document.createElement('div'); row.className = 'dayrow';
+        var q = document.createElement('span'); q.className = 'q'; q.textContent = 'x' + item.qty;
+        var name = document.createElement('span'); name.textContent = item.label;
+        var note = document.createElement('span'); note.className = 'v'; note.textContent = 'Unallocated';
+        row.appendChild(q); row.appendChild(name); row.appendChild(note); ul.appendChild(row);
+      });
+      document.getElementById('sect-unallocated').style.display = unallocated.length ? 'block' : 'none';
 
       document.getElementById('recv-empty').style.display =
         (ready.length + holding.length + rows.length) === 0 ? 'block' : 'none';
@@ -1230,8 +1267,8 @@
         .then(function(data) {
           if (!data) return;
           if (data.error) throw new Error(data.error);
-          showStatus(corrected === 0 ? 'Receipt undone. The item is outstanding again.' : 'Received quantity corrected to ' + corrected + '.', 'success');
-          loadOrders();
+          var correctionMessage = corrected === 0 ? 'Receipt undone. The item is outstanding again.' : 'Received quantity corrected to ' + corrected + '.';
+          loadOrders({ message: correctionMessage, type: 'success' });
         })
         .catch(function(err) {
           save.disabled = false; cancel.disabled = false; save.textContent = 'Save';
@@ -1285,8 +1322,8 @@
         var allocated = units - spare;
         var message = 'Delivery saved: ' + allocated + ' unit' + (allocated === 1 ? '' : 's') + ' mapped to customer orders.';
         if (spare > 0) message += ' ' + spare + ' extra unit' + (spare === 1 ? '' : 's') + ': no outstanding order. Keep aside.';
-        showStatus(message, spare > 0 ? 'info' : 'success');
-        loadOrders();
+        completed.forEach(addUnallocatedToday);
+        loadOrders({ message: message, type: spare > 0 ? 'info' : 'success' });
         setTimeout(function() { _flash = {}; }, 3000);
       })
       .catch(function(err) {
@@ -1341,7 +1378,7 @@
     });
 
     // Refresh button
-    document.getElementById('refresh-btn').addEventListener('click', loadOrders);
+    document.getElementById('refresh-btn').addEventListener('click', function() { loadOrders(); });
   </script>
 
 </body>
