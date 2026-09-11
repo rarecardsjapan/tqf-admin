@@ -348,21 +348,20 @@
 
     /* Compact allocation rows */
     .alloc-list { background: #fff; border: 1px solid #e0dbd2; }
-    .alloc { display: grid; grid-template-columns: minmax(190px, 0.7fr) minmax(320px, 2fr) auto; gap: 1rem; align-items: start; padding: 0.75rem 1rem; border-bottom: 1px solid #eeeae4; }
+    .alloc { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 1rem; align-items: start; padding: 0.7rem 1rem; border-bottom: 1px solid #eeeae4; }
     .alloc:last-child { border-bottom: none; }
     .alloc.flash { animation: allocflash 2.4s ease-out; }
     @keyframes allocflash { from { background: #fbf4e0; } to { background: #fff; } }
-    .alloc-head { min-width: 0; }
-    .alloc-who { display: flex; gap: 0.45rem; align-items: baseline; min-width: 0; font-size: 0.86rem; }
-    .alloc-who b { font-weight: 600; }
-    .alloc-who .cust { color: #6f6a62; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .alloc-when { font-size: 0.75rem; color: #999; white-space: nowrap; padding-top: 0.12rem; }
     .alloc-lines { min-width: 0; }
-    .alloc-line { display: flex; gap: 0.55rem; align-items: baseline; font-size: 0.84rem; padding: 0.08rem 0; }
+    .alloc-line { display: flex; gap: 0.5rem; align-items: baseline; min-width: 0; font-size: 0.84rem; padding: 0.08rem 0; }
     .alloc-line .mark { width: 0.9rem; flex: none; }
     .alloc-line.have .mark { color: #2e7d32; }
     .alloc-line.want { color: #a06510; }
-    .alloc-line .cnt { margin-left: auto; color: #999; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .alloc-line .item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .alloc-line .allocation-to { color: #6f6a62; white-space: nowrap; }
+    .alloc-line .allocation-to b { color: #2f2c28; font-weight: 600; }
+    .alloc-line .cnt { color: #999; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
     /* Empty state */
     .empty-state {
@@ -380,7 +379,7 @@
       .recv-entry-head { align-items: stretch; flex-direction: column; }
       .recv-search { max-width: none; width: 100%; box-sizing: border-box; }
       .alloc { grid-template-columns: 1fr; gap: 0.35rem; }
-      .alloc-when { padding-left: 1.45rem; }
+      .alloc-when { padding-left: 1.4rem; }
     }
   </style>
 </head>
@@ -1116,35 +1115,32 @@
       updateRecvSelection();
     }
 
-    // One order rendered as a compact row: order/customer, items, then date.
+    // One order rendered as compact item-to-allocation lines.
     function allocCard(order, alloc) {
       var box = document.createElement('div');
       box.className = 'alloc ' + alloc.status + (_flash[order.name] ? ' flash' : '');
-
-      var head = document.createElement('div'); head.className = 'alloc-head';
-      var who = document.createElement('div'); who.className = 'alloc-who';
-      var num = document.createElement('b'); num.textContent = order.name;
-      var cust = document.createElement('span'); cust.className = 'cust';
-      cust.textContent = order.customer_name || 'Guest';
-      who.appendChild(num); who.appendChild(cust);
-
       var when = document.createElement('span'); when.className = 'alloc-when';
       when.textContent = 'ordered ' + fmtDay(order.created_at);
-      head.appendChild(who);
-      box.appendChild(head);
 
       var lines = document.createElement('div'); lines.className = 'alloc-lines';
+      var orderLabel = (order.name || '').replace(/^#/, '');
+      var customerFirst = (order.customer_name || 'Guest').trim().split(/\s+/)[0];
       alloc.lines.forEach(function(l) {
         var row = document.createElement('div');
         var have = l.received >= l.ordered;
         row.className = 'alloc-line ' + (have ? 'have' : 'want');
         var mark = document.createElement('span'); mark.className = 'mark';
         mark.textContent = have ? '✓' : '•';
-        var name = document.createElement('span');
+        var name = document.createElement('span'); name.className = 'item-name';
         name.textContent = l.title + (l.variant ? ' (' + l.variant + ')' : '');
+        var to = document.createElement('span'); to.className = 'allocation-to';
+        var arrow = document.createTextNode('→ ');
+        var target = document.createElement('b'); target.textContent = orderLabel;
+        to.appendChild(arrow); to.appendChild(target); to.appendChild(document.createTextNode('  ' + customerFirst));
         var cnt = document.createElement('span'); cnt.className = 'cnt';
         cnt.textContent = have ? l.received + ' of ' + l.ordered : 'waiting  ' + l.received + ' of ' + l.ordered;
-        row.appendChild(mark); row.appendChild(name); row.appendChild(cnt);
+        row.appendChild(mark); row.appendChild(name); row.appendChild(to);
+        if (!have || l.ordered > 1) row.appendChild(cnt);
         lines.appendChild(row);
       });
       box.appendChild(lines);
