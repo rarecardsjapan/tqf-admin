@@ -307,15 +307,28 @@
     .dayrow .v { color: #6f6a62; }
 
     /* Receiving */
-    .recvbar { display: flex; align-items: flex-end; gap: 0.75rem; flex-wrap: wrap; background: #fff; border: 1px solid #e0dbd2; padding: 1rem; margin-bottom: 1.75rem; }
-    .recvbar label { display: block; font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #999; margin-bottom: 0.35rem; }
-    .recvbar select, .recvbar input {
-      font-family: inherit; font-size: 0.9rem; padding: 0.55rem 0.6rem;
-      border: 1px solid #e0dbd2; background: #fff; color: #1a1a1a; outline: none;
-    }
-    .recvbar select { min-width: 340px; max-width: 100%; }
-    .recvbar input { width: 84px; text-align: center; font-variant-numeric: tabular-nums; }
-    .recvbar select:focus, .recvbar input:focus { border-color: #8a8579; }
+    .recv-entry { background: #fff; border: 1px solid #e0dbd2; margin-bottom: 1.75rem; }
+    .recv-entry-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; padding: 1rem 1.25rem; border-bottom: 1px solid #e0dbd2; }
+    .recv-entry-head h2 { font-family: Georgia, serif; font-size: 1.08rem; font-weight: 400; margin: 0 0 0.2rem; }
+    .recv-entry-head p { color: #777168; font-size: 0.82rem; margin: 0; }
+    .recv-search { width: 260px; max-width: 40%; padding: 0.6rem 0.75rem; border: 1px solid #d8d2c9; font: inherit; font-size: 0.85rem; outline: none; }
+    .recv-search:focus { border-color: #81796f; box-shadow: 0 0 0 2px rgba(129,121,111,0.12); }
+    .recv-table-wrap { overflow-x: auto; }
+    table.recv-table { width: 100%; border-collapse: collapse; }
+    .recv-table th { padding: 0.7rem 1rem; background: #f7f4ef; border-bottom: 1px solid #e0dbd2; color: #847f77; font-size: 0.68rem; letter-spacing: 0.1em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+    .recv-table td { padding: 0.8rem 1rem; border-bottom: 1px solid #eeeae4; font-size: 0.88rem; vertical-align: middle; }
+    .recv-table tbody tr:last-child td { border-bottom: none; }
+    .recv-table tbody tr.is-selected td { background: #f3f7f0; }
+    .recv-table .check-cell { width: 44px; text-align: center; }
+    .recv-table .product-cell { min-width: 260px; font-weight: 600; }
+    .recv-table .detail-cell { min-width: 140px; color: #514d47; }
+    .recv-table .qty-cell { width: 130px; }
+    .recv-check { width: 20px; height: 20px; accent-color: #263f2a; cursor: pointer; }
+    .recv-qty { width: 72px; padding: 0.48rem 0.35rem; border: 1px solid #d8d2c9; font: inherit; text-align: center; font-variant-numeric: tabular-nums; outline: none; }
+    .recv-qty:disabled { background: #f5f2ed; color: #aaa; }
+    .recv-qty:focus { border-color: #81796f; box-shadow: 0 0 0 2px rgba(129,121,111,0.12); }
+    .recv-entry-foot { display: flex; justify-content: flex-end; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-top: 1px solid #e0dbd2; }
+    .recv-selection { color: #777168; font-size: 0.82rem; }
     .recv-btn {
       padding: 0.6rem 1.5rem; background: #1a1a1a; color: #f5f0eb; border: none; font-family: inherit;
       font-size: 0.72rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; cursor: pointer;
@@ -360,6 +373,8 @@
       body { padding: 1rem; }
       .orders-table { font-size: 0.8rem; display: block; overflow-x: auto; }
       .orders-table th, .orders-table td { padding: 10px 12px; }
+      .recv-entry-head { align-items: stretch; flex-direction: column; }
+      .recv-search { max-width: none; width: 100%; box-sizing: border-box; }
     }
   </style>
 </head>
@@ -434,16 +449,24 @@
 
     <!-- Receiving panel: log what arrived, see which order each unit goes to -->
     <div class="panel" id="panel-receiving">
-      <div class="recvbar">
-        <div>
-          <label for="recv-variant">What arrived</label>
-          <select id="recv-variant"></select>
+      <div class="recv-entry" id="recv-entry">
+        <div class="recv-entry-head">
+          <div>
+            <h2>Log today’s delivery</h2>
+            <p>Tick everything that arrived, adjust the quantities, then submit once.</p>
+          </div>
+          <input class="recv-search" id="recv-search" type="search" placeholder="Search product, colour or size" aria-label="Search receiving items" />
         </div>
-        <div>
-          <label for="recv-qty">How many</label>
-          <input type="number" id="recv-qty" min="1" step="1" value="1" />
+        <div class="recv-table-wrap">
+          <table class="recv-table">
+            <thead><tr><th class="check-cell">In</th><th>Product</th><th>Colour</th><th>Size / variant</th><th>Quantity</th></tr></thead>
+            <tbody id="recv-body"></tbody>
+          </table>
         </div>
-        <button class="recv-btn" id="recv-btn">Receive</button>
+        <div class="recv-entry-foot">
+          <span class="recv-selection" id="recv-selection">Nothing selected</span>
+          <button class="recv-btn" id="recv-btn" disabled>Submit received items</button>
+        </div>
       </div>
 
       <div class="sect" id="sect-ready" style="display:none;">
@@ -949,6 +972,7 @@
     // and the warehouse person and Rachelle see the same picture on any device.
     var RECV_RE = /^recv:(\d+):(\d+):(\d{8})$/i;
     var _flash = {};
+    var _recvOptions = [];
 
     // Day stamp in Hong Kong time, matching the Worker, so "today" is the warehouse day.
     function todayHK() {
@@ -1004,6 +1028,85 @@
       });
     }
 
+    // Shopify commonly sends variants as "Colour / Size". Keep the full value
+    // when it cannot be split cleanly, so no identifying detail is lost.
+    function variantParts(value) {
+      var parts = (value || '').split('/').map(function(s) { return s.trim(); }).filter(Boolean);
+      if (parts.length >= 2) return { colour: parts.shift(), detail: parts.join(' / ') };
+      var only = parts[0] || '';
+      var looksLikeSize = /^(one size|os|eu\s*\d+|uk\s*\d+|us\s*\d+|[xsml]{1,3}|\d+)$/i.test(only);
+      return looksLikeSize ? { colour: '', detail: only } : { colour: only, detail: '' };
+    }
+
+    function updateRecvSelection() {
+      var rows = Array.from(document.querySelectorAll('#recv-body tr'));
+      var selected = rows.filter(function(row) { return row.querySelector('.recv-check').checked; });
+      var units = selected.reduce(function(sum, row) {
+        return sum + (parseInt(row.querySelector('.recv-qty').value, 10) || 0);
+      }, 0);
+      var note = document.getElementById('recv-selection');
+      note.textContent = selected.length
+        ? selected.length + ' item' + (selected.length === 1 ? '' : 's') + ', ' + units + ' unit' + (units === 1 ? '' : 's')
+        : 'Nothing selected';
+      document.getElementById('recv-btn').disabled = selected.length === 0 || units < selected.length;
+    }
+
+    function renderRecvTable(opts) {
+      _recvOptions = opts;
+      var body = document.getElementById('recv-body');
+      var query = document.getElementById('recv-search').value.trim().toLowerCase();
+      body.textContent = '';
+      opts.forEach(function(v) {
+        var details = variantParts(v.variant);
+        var haystack = [v.title, details.colour, details.detail, v.variant].join(' ').toLowerCase();
+        if (query && haystack.indexOf(query) === -1) return;
+
+        var row = document.createElement('tr');
+        row.dataset.variantId = String(v.variant_id);
+        row.dataset.label = v.title + (v.variant ? ' (' + v.variant + ')' : '');
+
+        var checkCell = document.createElement('td'); checkCell.className = 'check-cell';
+        var check = document.createElement('input'); check.type = 'checkbox'; check.className = 'recv-check';
+        check.setAttribute('aria-label', 'Received ' + row.dataset.label);
+        checkCell.appendChild(check);
+
+        var product = document.createElement('td'); product.className = 'product-cell'; product.textContent = v.title;
+        var colour = document.createElement('td'); colour.className = 'detail-cell'; colour.textContent = details.colour || '—';
+        var detail = document.createElement('td'); detail.className = 'detail-cell'; detail.textContent = details.detail || '—';
+        var qtyCell = document.createElement('td'); qtyCell.className = 'qty-cell';
+        var qty = document.createElement('input'); qty.type = 'number'; qty.className = 'recv-qty';
+        qty.min = '1'; qty.max = String(v.qty); qty.step = '1'; qty.disabled = true; qty.placeholder = '0';
+        qty.setAttribute('aria-label', 'Quantity received for ' + row.dataset.label);
+        qtyCell.appendChild(qty);
+
+        check.addEventListener('change', function() {
+          qty.disabled = !check.checked;
+          if (check.checked && !qty.value) qty.value = '1';
+          if (!check.checked) qty.value = '';
+          row.classList.toggle('is-selected', check.checked);
+          if (check.checked) qty.focus();
+          updateRecvSelection();
+        });
+        qty.addEventListener('input', function() {
+          var n = parseInt(qty.value, 10);
+          if (n > v.qty) qty.value = String(v.qty);
+          if (n < 1) qty.value = '1';
+          updateRecvSelection();
+        });
+
+        row.appendChild(checkCell); row.appendChild(product); row.appendChild(colour); row.appendChild(detail); row.appendChild(qtyCell);
+        body.appendChild(row);
+      });
+
+      if (!body.children.length) {
+        var emptyRow = document.createElement('tr');
+        var emptyCell = document.createElement('td'); emptyCell.colSpan = 5; emptyCell.className = 'empty-state';
+        emptyCell.textContent = opts.length ? 'No items match your search.' : 'No customer orders are waiting for items.';
+        emptyRow.appendChild(emptyCell); body.appendChild(emptyRow);
+      }
+      updateRecvSelection();
+    }
+
     // One order rendered as a card: who it is for and what is in or missing.
     function allocCard(order, alloc) {
       var box = document.createElement('div');
@@ -1044,24 +1147,9 @@
 
     function renderReceiving() {
       // What can be received: only variants an unfulfilled order is still waiting on.
-      var sel = document.getElementById('recv-variant');
-      var prev = sel.value;
-      sel.textContent = '';
       var opts = outstandingVariants(ALL_ORDERS);
-      if (opts.length === 0) {
-        var none = document.createElement('option');
-        none.value = ''; none.textContent = 'Nothing outstanding';
-        sel.appendChild(none);
-      }
-      opts.forEach(function(v) {
-        var op = document.createElement('option');
-        op.value = String(v.variant_id);
-        op.textContent = v.title + (v.variant ? ' (' + v.variant + ')' : '') +
-          '  —  ' + v.qty + ' waiting since ' + fmtDay(v.since);
-        sel.appendChild(op);
-      });
-      if (prev) { sel.value = prev; if (!sel.value) sel.selectedIndex = 0; }
-      document.getElementById('recv-btn').disabled = opts.length === 0;
+      renderRecvTable(opts);
+      document.getElementById('recv-entry').style.display = opts.length ? 'block' : 'none';
 
       // Pick list: ready on top, holding below, each oldest first.
       var ready = [], holding = [];
@@ -1108,55 +1196,56 @@
         (ready.length + holding.length + rows.length) === 0 ? 'block' : 'none';
     }
 
-    // Log a receipt. The Worker assigns the units and the pick list redraws here.
+    document.getElementById('recv-search').addEventListener('input', function() {
+      renderRecvTable(_recvOptions);
+    });
+
+    // Submit the completed delivery sheet. Requests run one at a time so each
+    // allocation sees the Shopify tags written by the previous item.
     document.getElementById('recv-btn').addEventListener('click', function() {
       var btn = this;
-      var sel = document.getElementById('recv-variant');
-      var qtyEl = document.getElementById('recv-qty');
-      var variantId = sel.value;
-      var qty = parseInt(qtyEl.value, 10);
+      var entries = Array.from(document.querySelectorAll('#recv-body tr')).filter(function(row) {
+        var check = row.querySelector('.recv-check');
+        return check && check.checked;
+      }).map(function(row) {
+        return { variant_id: row.dataset.variantId, qty: parseInt(row.querySelector('.recv-qty').value, 10), label: row.dataset.label };
+      });
+      if (!entries.length) { showStatus('Tick the items that arrived first.', 'error'); return; }
 
-      if (!variantId) { showStatus('Pick what arrived first.', 'error'); return; }
-      if (!(qty >= 1)) { showStatus('Enter how many units arrived.', 'error'); return; }
-
-      var label = sel.options[sel.selectedIndex].textContent.split('  —  ')[0];
       var prev = btn.textContent;
-      btn.disabled = true; btn.textContent = 'Saving...';
+      btn.disabled = true; btn.textContent = 'Submitting 0 of ' + entries.length;
+      _flash = {};
+      var completed = [];
 
-      fetch(WORKER_URL + '/api/receive', {
-        method: 'POST',
-        headers: authHeaders({ 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ variant_id: variantId, qty: qty })
-      })
-      .then(function(r) { if (r.status === 401) { lockOut(); return null; } return r.json(); })
-      .then(function(data) {
-        btn.disabled = false; btn.textContent = prev;
-        if (!data) return;
-        if (data.error) { showStatus('Receive failed: ' + data.error, 'error'); return; }
-
-        _flash = {};
-        (data.allocated || []).forEach(function(a) { _flash[a.name] = true; });
-
-        var parts = (data.allocated || []).map(function(a) {
-          var n = a.filled.reduce(function(sum, f) { return sum + f.took; }, 0);
-          return n + ' to ' + a.name + (a.status === 'ready' ? ' (ready to pack)' : ' (holding)');
+      entries.reduce(function(chain, entry, index) {
+        return chain.then(function() {
+          btn.textContent = 'Submitting ' + (index + 1) + ' of ' + entries.length;
+          return fetch(WORKER_URL + '/api/receive', {
+            method: 'POST',
+            headers: authHeaders({ 'Content-Type': 'application/json' }),
+            body: JSON.stringify({ variant_id: entry.variant_id, qty: entry.qty })
+          }).then(function(r) {
+            if (r.status === 401) { lockOut(); throw new Error('Session expired'); }
+            return r.json();
+          }).then(function(data) {
+            if (data.error) throw new Error(entry.label + ': ' + data.error);
+            completed.push(entry);
+            (data.allocated || []).forEach(function(a) { _flash[a.name] = true; });
+          });
         });
-        var msg = parts.length
-          ? qty + 'x ' + label + ' received. Assigned ' + parts.join(', ') + '.'
-          : qty + 'x ' + label + ' received. No order was waiting for it.';
-        if (data.surplus > 0) {
-          msg += ' ' + data.surplus + ' spare unit' + (data.surplus === 1 ? '' : 's') +
-                 ' with no order waiting, keep aside.';
-        }
-        showStatus(msg, parts.length ? 'success' : 'info');
-
-        qtyEl.value = 1;
+      }, Promise.resolve())
+      .then(function() {
+        var units = completed.reduce(function(sum, entry) { return sum + entry.qty; }, 0);
+        btn.textContent = prev;
+        showStatus('Delivery saved: ' + completed.length + ' item' + (completed.length === 1 ? '' : 's') + ', ' + units + ' unit' + (units === 1 ? '' : 's') + ' allocated.', 'success');
         loadOrders();
         setTimeout(function() { _flash = {}; }, 3000);
       })
       .catch(function(err) {
         btn.disabled = false; btn.textContent = prev;
-        showStatus('Receive failed: ' + err.message, 'error');
+        var prefix = completed.length ? completed.length + ' item(s) saved before the error. ' : '';
+        showStatus(prefix + 'Receiving stopped: ' + err.message, 'error');
+        if (completed.length) loadOrders();
       });
     });
 
