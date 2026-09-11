@@ -1022,9 +1022,12 @@
           if (new Date(o.created_at) < new Date(map[k].since)) map[k].since = o.created_at;
         });
       });
+      // The warehouse sheet is grouped naturally by brand because product
+      // titles begin with the brand name. Allocation itself remains oldest-first
+      // in the Worker and is not affected by this display order.
       return Object.keys(map).map(function(k) { return map[k]; }).sort(function(a, b) {
-        var d = new Date(a.since) - new Date(b.since);
-        return d !== 0 ? d : a.title.localeCompare(b.title);
+        var title = a.title.localeCompare(b.title, undefined, { sensitivity: 'base' });
+        return title !== 0 ? title : a.variant.localeCompare(b.variant, undefined, { sensitivity: 'base' });
       });
     }
 
