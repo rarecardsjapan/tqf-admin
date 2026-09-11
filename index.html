@@ -332,6 +332,8 @@
     .recv-thumb img { display: block; width: 48px; height: 48px; object-fit: contain; }
     .recv-thumb:hover { border-color: #81796f; }
     .recv-no-image { flex: 0 0 52px; width: 52px; height: 52px; background: #f5f2ed; border: 1px solid #ebe6de; }
+    .recv-product-link { color: #1a1a1a; text-decoration: underline; text-decoration-color: #b9b2a8; text-underline-offset: 3px; }
+    .recv-product-link:hover { text-decoration-color: #1a1a1a; }
     .recv-table .detail-cell { min-width: 140px; color: #514d47; }
     .recv-table .qty-cell { width: 130px; }
     .recv-check { width: 20px; height: 20px; accent-color: #263f2a; cursor: pointer; }
@@ -1119,7 +1121,9 @@
         } else {
           var noImage = document.createElement('span'); noImage.className = 'recv-no-image'; noImage.setAttribute('aria-hidden', 'true'); productWrap.appendChild(noImage);
         }
-        var productName = document.createElement('span'); productName.textContent = v.title; productWrap.appendChild(productName); product.appendChild(productWrap);
+        var productName = document.createElement(v.product_url ? 'a' : 'span'); productName.textContent = v.title;
+        if (v.product_url) { productName.className = 'recv-product-link'; productName.href = v.product_url; productName.target = '_blank'; productName.rel = 'noopener'; }
+        productWrap.appendChild(productName); product.appendChild(productWrap);
         var colour = document.createElement('td'); colour.className = 'detail-cell'; colour.textContent = details.colour || '—';
         var detail = document.createElement('td'); detail.className = 'detail-cell'; detail.textContent = details.detail || '—';
         var qtyCell = document.createElement('td'); qtyCell.className = 'qty-cell';
