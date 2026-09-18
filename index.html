@@ -355,6 +355,11 @@
     .recv-queue-item.gets { background: #e6efe2; }
     .recv-queue-item.gets .recv-queue-order { color: #1d3320; }
     .recv-queue-note { margin: 0.6rem 0 0; color: #847f77; font-size: 0.76rem; }
+    .recv-hide { margin-left: 0.5rem; padding: 0.14rem 0.5rem; border: 1px solid #d8d2c9; background: #fff; font: inherit; font-size: 0.75rem; color: #6b665f; cursor: pointer; }
+    .recv-hide:hover { border-color: #81796f; color: #1a1a1a; }
+    .recv-head-tools { display: flex; align-items: center; gap: 0.6rem; }
+    .recv-toggle-all { padding: 0.55rem 0.8rem; border: 1px solid #d8d2c9; background: #fff; font: inherit; font-size: 0.82rem; color: #514d47; white-space: nowrap; cursor: pointer; }
+    .recv-toggle-all:hover { border-color: #81796f; color: #1a1a1a; }
     .recv-check { width: 20px; height: 20px; accent-color: #263f2a; cursor: pointer; }
     .recv-qty { width: 72px; padding: 0.48rem 0.35rem; border: 1px solid #d8d2c9; font: inherit; text-align: center; font-variant-numeric: tabular-nums; outline: none; }
     .recv-qty:disabled { background: #f5f2ed; color: #aaa; }
@@ -404,6 +409,7 @@
       .orders-table th, .orders-table td { padding: 10px 12px; }
       .recv-entry-head { align-items: stretch; flex-direction: column; }
       .recv-search { max-width: none; width: 100%; box-sizing: border-box; }
+      .recv-head-tools { flex-direction: column; align-items: stretch; width: 100%; }
       .alloc { grid-template-columns: 1fr; gap: 0.35rem; }
       .alloc-when { padding-left: 1.4rem; }
     }
@@ -486,7 +492,10 @@
             <h2>Log today’s delivery</h2>
             <p>Tick everything that arrived, adjust the quantities, then submit once.</p>
           </div>
-          <input class="recv-search" id="recv-search" type="search" placeholder="Search product, colour or size" aria-label="Search receiving items" />
+          <div class="recv-head-tools">
+            <button class="recv-toggle-all" id="recv-toggle-all" type="button">Show all orders</button>
+            <input class="recv-search" id="recv-search" type="search" placeholder="Search product, colour or size" aria-label="Search receiving items" />
+          </div>
         </div>
         <div class="recv-table-wrap">
           <table class="recv-table">
@@ -1130,6 +1139,16 @@
       document.getElementById('recv-btn').disabled = selected.length === 0 || units < selected.length;
     }
 
+    // The header button says what it will do next, so it has to follow whatever
+    // the individual rows are currently showing.
+    function updateToggleAllLabel() {
+      var btn = document.getElementById('recv-toggle-all');
+      var chips = Array.prototype.slice.call(document.querySelectorAll('#recv-body .recv-waiting'));
+      btn.disabled = chips.length === 0;
+      var anyClosed = chips.some(function(c) { return c.getAttribute('aria-expanded') !== 'true'; });
+      btn.textContent = anyClosed ? 'Show all orders' : 'Hide all orders';
+    }
+
     function renderRecvTable(opts) {
       _recvOptions = opts;
       var body = document.getElementById('recv-body');
@@ -1209,6 +1228,10 @@
           queue.appendChild(entry);
         });
         detailCell.appendChild(queue);
+        var hide = document.createElement('button'); hide.type = 'button'; hide.className = 'recv-hide';
+        hide.textContent = 'Hide';
+        hide.addEventListener('click', function() { setOpen(false); updateToggleAllLabel(); });
+        detailCell.appendChild(hide);
         var note = document.createElement('p'); note.className = 'recv-queue-note';
         note.textContent = 'Oldest order first. Units are allocated down this list, so the highlighted orders are the ones this delivery fills.';
         detailCell.appendChild(note);
@@ -1235,6 +1258,7 @@
 
         waitBtn.addEventListener('click', function() {
           setOpen(waitBtn.getAttribute('aria-expanded') !== 'true');
+          updateToggleAllLabel();
         });
 
         check.addEventListener('change', function() {
@@ -1242,8 +1266,7 @@
           if (check.checked && !qty.value) qty.value = '1';
           if (!check.checked) qty.value = '';
           row.classList.toggle('is-selected', check.checked);
-          // Ticking an item is the moment the queue matters, so show it.
-          if (check.checked) { setOpen(true); qty.focus(); }
+          if (check.checked) qty.focus();
           markQueue();
           updateRecvSelection();
         });
@@ -1268,6 +1291,7 @@
         emptyRow.appendChild(emptyCell); body.appendChild(emptyRow);
       }
       updateRecvSelection();
+      updateToggleAllLabel();
     }
 
     // One order rendered as compact item-to-allocation lines.
@@ -1442,6 +1466,16 @@
 
     document.getElementById('recv-search').addEventListener('input', function() {
       renderRecvTable(_recvOptions);
+    });
+
+    // Open or shut every row on the sheet at once. Driven through the rows' own
+    // buttons so one code path owns the open state.
+    document.getElementById('recv-toggle-all').addEventListener('click', function() {
+      var chips = Array.prototype.slice.call(document.querySelectorAll('#recv-body .recv-waiting'));
+      var opening = chips.some(function(c) { return c.getAttribute('aria-expanded') !== 'true'; });
+      chips.forEach(function(c) {
+        if ((c.getAttribute('aria-expanded') === 'true') !== opening) c.click();
+      });
     });
 
     // Submit the completed delivery sheet. Requests run one at a time so each
