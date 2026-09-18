@@ -343,14 +343,14 @@
     .recv-waiting-count { font-variant-numeric: tabular-nums; }
     .recv-expand {
       display: inline-flex; align-items: center; justify-content: center;
-      width: 22px; height: 22px; margin-left: 0.5rem; padding: 0;
+      flex: 0 0 22px; width: 22px; height: 22px; padding: 0;
       border: 1px solid #d8d2c9; background: #fff; color: #514d47;
-      font: inherit; font-size: 0.95rem; line-height: 1; cursor: pointer; vertical-align: -5px;
+      font: inherit; font-size: 0.95rem; line-height: 1; cursor: pointer;
     }
     .recv-expand:hover { border-color: #81796f; color: #1a1a1a; }
     .recv-expand[aria-expanded="true"] { background: #263f2a; border-color: #263f2a; color: #fff; }
     tr.recv-detail[hidden] { display: none; }
-    tr.recv-detail > td { padding: 0.8rem 1rem 0.9rem 4.3rem; background: #faf8f5; border-bottom: 1px solid #eeeae4; }
+    tr.recv-detail > td { padding: 0.8rem 1rem 0.9rem 5.9rem; background: #faf8f5; border-bottom: 1px solid #eeeae4; }
     .recv-queue { display: flex; flex-wrap: wrap; gap: 0.2rem 0.5rem; }
     .recv-queue-item { display: inline-flex; align-items: baseline; gap: 0.45rem; padding: 0.14rem 0.45rem; font-size: 0.83rem; color: #6b665f; font-variant-numeric: tabular-nums; }
     .recv-queue-rank { min-width: 1.2rem; color: #a8a29a; font-size: 0.72rem; text-align: right; }
@@ -1169,8 +1169,13 @@
         check.setAttribute('aria-label', 'Received ' + row.dataset.label);
         checkCell.appendChild(check);
 
+        var isOpen = !!_recvExpanded[String(v.variant_id)];
+        var waitBtn = document.createElement('button'); waitBtn.type = 'button'; waitBtn.className = 'recv-expand';
+        waitBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+
         var product = document.createElement('td'); product.className = 'product-cell';
         var productWrap = document.createElement('div'); productWrap.className = 'recv-product';
+        productWrap.appendChild(waitBtn);
         if (v.image) {
           var imageLink = document.createElement('a'); imageLink.className = 'recv-thumb'; imageLink.href = v.image;
           imageLink.target = '_blank'; imageLink.rel = 'noopener'; imageLink.title = 'Open full product image';
@@ -1194,12 +1199,9 @@
         }
 
         var waitCell = document.createElement('td'); waitCell.className = 'waiting-cell';
-        var isOpen = !!_recvExpanded[String(v.variant_id)];
         var waitNum = document.createElement('span'); waitNum.className = 'recv-waiting-count';
         waitNum.textContent = String(v.qty);
-        var waitBtn = document.createElement('button'); waitBtn.type = 'button'; waitBtn.className = 'recv-expand';
-        waitBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        waitCell.appendChild(waitNum); waitCell.appendChild(waitBtn);
+        waitCell.appendChild(waitNum);
 
         var qtyCell = document.createElement('td'); qtyCell.className = 'qty-cell';
         var qty = document.createElement('input'); qty.type = 'number'; qty.className = 'recv-qty';
