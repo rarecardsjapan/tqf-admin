@@ -342,9 +342,9 @@
     .recv-table .qty-cell { width: 130px; }
     .recv-waiting { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.32rem 0.55rem; border: 1px solid #d8d2c9; background: #fff; font: inherit; font-size: 0.85rem; color: #1a1a1a; font-variant-numeric: tabular-nums; cursor: pointer; }
     .recv-waiting:hover { border-color: #81796f; }
-    .recv-waiting .caret { color: #847f77; font-size: 0.58rem; }
-    .recv-waiting[aria-expanded="true"] { background: #f3f0ea; border-color: #81796f; }
-    .recv-waiting[aria-expanded="true"] .caret { transform: rotate(180deg); }
+    .recv-waiting .caret { display: inline-block; color: #847f77; font-size: 0.72rem; line-height: 1; }
+    .recv-waiting[aria-expanded="true"] { background: #263f2a; border-color: #263f2a; color: #fff; }
+    .recv-waiting[aria-expanded="true"] .caret { color: #cfd9cb; }
     tr.recv-detail[hidden] { display: none; }
     tr.recv-detail > td { padding: 0.8rem 1rem 0.9rem 4.3rem; background: #faf8f5; border-bottom: 1px solid #eeeae4; }
     .recv-queue { display: flex; flex-wrap: wrap; gap: 0.2rem 0.5rem; }
@@ -1216,10 +1216,15 @@
 
         function setOpen(open) {
           waitBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+          // The arrow glyph is swapped rather than rotated: a CSS transform has
+          // no effect on an inline element, so the old caret never flipped.
+          caret.textContent = open ? '▴' : '▾';
+          waitBtn.title = (open ? 'Hide' : 'Show') + ' the orders waiting for this item';
           detailRow.hidden = !open;
           if (open) _recvExpanded[String(v.variant_id)] = true;
           else delete _recvExpanded[String(v.variant_id)];
         }
+        setOpen(isOpen);
         // Mark the orders this delivery actually reaches.
         function markQueue() {
           var n = check.checked ? (parseInt(qty.value, 10) || 0) : 0;
