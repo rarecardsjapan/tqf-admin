@@ -324,6 +324,7 @@
     .recv-table th { padding: 0.7rem 1rem; background: #f7f4ef; border-bottom: 1px solid #e0dbd2; color: #847f77; font-size: 0.68rem; letter-spacing: 0.1em; text-align: left; text-transform: uppercase; white-space: nowrap; }
     .recv-table td { padding: 0.8rem 1rem; border-bottom: 1px solid #eeeae4; font-size: 0.88rem; vertical-align: middle; }
     .recv-table tbody tr:last-child td { border-bottom: none; }
+    .recv-table tbody tr.recv-row:nth-last-child(2) td { border-bottom: none; }
     .recv-table tbody tr.is-selected td { background: #f3f7f0; }
     .recv-table .check-cell { width: 44px; text-align: center; }
     .recv-table .product-cell { min-width: 300px; font-weight: 600; }
@@ -335,7 +336,25 @@
     .recv-product-link { color: #1a1a1a; text-decoration: underline; text-decoration-color: #b9b2a8; text-underline-offset: 3px; }
     .recv-product-link:hover { text-decoration-color: #1a1a1a; }
     .recv-table .detail-cell { min-width: 140px; color: #514d47; }
+    .recv-table .added-cell { width: 120px; color: #514d47; white-space: nowrap; }
+    .recv-new { display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.36rem; background: #263f2a; color: #fff; font-size: 0.6rem; letter-spacing: 0.09em; text-transform: uppercase; vertical-align: 1px; }
+    .recv-table .waiting-cell { width: 92px; }
     .recv-table .qty-cell { width: 130px; }
+    .recv-waiting { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.32rem 0.55rem; border: 1px solid #d8d2c9; background: #fff; font: inherit; font-size: 0.85rem; color: #1a1a1a; font-variant-numeric: tabular-nums; cursor: pointer; }
+    .recv-waiting:hover { border-color: #81796f; }
+    .recv-waiting .caret { color: #847f77; font-size: 0.58rem; }
+    .recv-waiting[aria-expanded="true"] { background: #f3f0ea; border-color: #81796f; }
+    .recv-waiting[aria-expanded="true"] .caret { transform: rotate(180deg); }
+    tr.recv-detail[hidden] { display: none; }
+    tr.recv-detail > td { padding: 0.8rem 1rem 0.9rem 4.3rem; background: #faf8f5; border-bottom: 1px solid #eeeae4; }
+    .recv-queue { display: flex; flex-wrap: wrap; gap: 0.2rem 0.5rem; }
+    .recv-queue-item { display: inline-flex; align-items: baseline; gap: 0.45rem; padding: 0.14rem 0.45rem; font-size: 0.83rem; color: #6b665f; font-variant-numeric: tabular-nums; }
+    .recv-queue-rank { min-width: 1.2rem; color: #a8a29a; font-size: 0.72rem; text-align: right; }
+    .recv-queue-order { color: #1a1a1a; font-weight: 600; }
+    .recv-queue-mult { color: #263f2a; font-weight: 600; }
+    .recv-queue-item.gets { background: #e6efe2; }
+    .recv-queue-item.gets .recv-queue-order { color: #1d3320; }
+    .recv-queue-note { margin: 0.6rem 0 0; color: #847f77; font-size: 0.76rem; }
     .recv-check { width: 20px; height: 20px; accent-color: #263f2a; cursor: pointer; }
     .recv-qty { width: 72px; padding: 0.48rem 0.35rem; border: 1px solid #d8d2c9; font: inherit; text-align: center; font-variant-numeric: tabular-nums; outline: none; }
     .recv-qty:disabled { background: #f5f2ed; color: #aaa; }
@@ -471,7 +490,7 @@
         </div>
         <div class="recv-table-wrap">
           <table class="recv-table">
-            <thead><tr><th class="check-cell">In</th><th>Product</th><th>Colour</th><th>Size / variant</th><th>Quantity</th></tr></thead>
+            <thead><tr><th class="check-cell">In</th><th>Product</th><th>Colour</th><th>Size / variant</th><th>Added</th><th>Waiting</th><th>Quantity</th></tr></thead>
             <tbody id="recv-body"></tbody>
           </table>
         </div>
@@ -991,6 +1010,8 @@
     var RECV_RE = /^recv:(\d+):(\d+):(\d{8})$/i;
     var _flash = {};
     var _recvOptions = [];
+    // Which receiving rows have their waiting-order queue open, keyed by variant id.
+    var _recvExpanded = {};
 
     // Day stamp in Hong Kong time, matching the Worker, so "today" is the warehouse day.
     function todayHK() {
@@ -1048,6 +1069,12 @@
       return { lines: lines, status: allIn ? 'ready' : (anyIn ? 'holding' : 'none') };
     }
 
+    // Flags rows that turned up in the last few days, so new items stand out
+    // without having to read down a column of dates.
+    function isRecentlyAdded(iso) {
+      return (Date.now() - new Date(iso).getTime()) < 3 * 24 * 60 * 60 * 1000;
+    }
+
     // Variants still owed to a customer, longest-waiting first.
     function outstandingVariants(orders) {
       var map = {};
@@ -1059,10 +1086,17 @@
           var short = it.quantity - got;
           if (short <= 0) return;
           var k = String(it.variant_id);
-          if (!map[k]) map[k] = { variant_id: it.variant_id, title: it.title, variant: it.variant || '', image: it.image || null, product_url: it.product_url || null, qty: 0, since: o.created_at };
+          if (!map[k]) map[k] = { variant_id: it.variant_id, title: it.title, variant: it.variant || '', image: it.image || null, product_url: it.product_url || null, qty: 0, since: o.created_at, orders: [] };
           map[k].qty += short;
+          map[k].orders.push({ name: o.name, created_at: o.created_at, qty: short });
           if (new Date(o.created_at) < new Date(map[k].since)) map[k].since = o.created_at;
         });
+      });
+      // The Worker allocates strictly oldest order first, so sorting the queue
+      // the same way makes the displayed order the real one: if three units
+      // arrive, they go to the first three names on this list.
+      Object.keys(map).forEach(function(k) {
+        map[k].orders.sort(function(a, b) { return new Date(a.created_at) - new Date(b.created_at); });
       });
       // The warehouse sheet is grouped naturally by brand because product
       // titles begin with the brand name. Allocation itself remains oldest-first
@@ -1084,7 +1118,7 @@
     }
 
     function updateRecvSelection() {
-      var rows = Array.from(document.querySelectorAll('#recv-body tr'));
+      var rows = Array.from(document.querySelectorAll('#recv-body tr.recv-row'));
       var selected = rows.filter(function(row) { return row.querySelector('.recv-check').checked; });
       var units = selected.reduce(function(sum, row) {
         return sum + (parseInt(row.querySelector('.recv-qty').value, 10) || 0);
@@ -1106,7 +1140,7 @@
         var haystack = [v.title, details.colour, details.detail, v.variant].join(' ').toLowerCase();
         if (query && haystack.indexOf(query) === -1) return;
 
-        var row = document.createElement('tr');
+        var row = document.createElement('tr'); row.className = 'recv-row';
         row.dataset.variantId = String(v.variant_id);
         row.dataset.label = v.title + (v.variant ? ' (' + v.variant + ')' : '');
 
@@ -1130,34 +1164,101 @@
         productWrap.appendChild(productName); product.appendChild(productWrap);
         var colour = document.createElement('td'); colour.className = 'detail-cell'; colour.textContent = details.colour || '—';
         var detail = document.createElement('td'); detail.className = 'detail-cell'; detail.textContent = details.detail || '—';
+        // When this item first appeared on the tab, which is the date of the
+        // oldest order still waiting for it.
+        var added = document.createElement('td'); added.className = 'added-cell';
+        added.appendChild(document.createTextNode(fmtDay(v.since)));
+        if (isRecentlyAdded(v.since)) {
+          var pill = document.createElement('span'); pill.className = 'recv-new'; pill.textContent = 'New';
+          added.appendChild(pill);
+        }
+
+        var waitCell = document.createElement('td'); waitCell.className = 'waiting-cell';
+        var waitBtn = document.createElement('button'); waitBtn.type = 'button'; waitBtn.className = 'recv-waiting';
+        var isOpen = !!_recvExpanded[String(v.variant_id)];
+        waitBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        waitBtn.title = 'Show the orders waiting for this item';
+        var waitNum = document.createElement('span'); waitNum.textContent = String(v.qty);
+        var caret = document.createElement('span'); caret.className = 'caret'; caret.textContent = '▾';
+        waitBtn.appendChild(waitNum); waitBtn.appendChild(caret);
+        waitCell.appendChild(waitBtn);
+
         var qtyCell = document.createElement('td'); qtyCell.className = 'qty-cell';
         var qty = document.createElement('input'); qty.type = 'number'; qty.className = 'recv-qty';
         qty.min = '1'; qty.max = '500'; qty.step = '1'; qty.disabled = true; qty.placeholder = '0';
         qty.setAttribute('aria-label', 'Quantity received for ' + row.dataset.label);
         qtyCell.appendChild(qty);
 
+        // The queue of orders waiting for this item, oldest first.
+        var detailRow = document.createElement('tr'); detailRow.className = 'recv-detail';
+        detailRow.hidden = !isOpen;
+        var detailCell = document.createElement('td'); detailCell.colSpan = 7;
+        var queue = document.createElement('div'); queue.className = 'recv-queue';
+        (v.orders || []).forEach(function(ord, i) {
+          var entry = document.createElement('span'); entry.className = 'recv-queue-item';
+          var rank = document.createElement('span'); rank.className = 'recv-queue-rank'; rank.textContent = (i + 1) + '.';
+          var name = document.createElement('span'); name.className = 'recv-queue-order'; name.textContent = ord.name;
+          var when = document.createElement('span'); when.textContent = fmtDay(ord.created_at);
+          entry.appendChild(rank); entry.appendChild(name); entry.appendChild(when);
+          // Nearly every order is for a single unit, so the multiplier only
+          // appears when there is something to notice.
+          if (ord.qty > 1) {
+            var mult = document.createElement('span'); mult.className = 'recv-queue-mult'; mult.textContent = '×' + ord.qty;
+            entry.appendChild(mult);
+          }
+          queue.appendChild(entry);
+        });
+        detailCell.appendChild(queue);
+        var note = document.createElement('p'); note.className = 'recv-queue-note';
+        note.textContent = 'Oldest order first. Units are allocated down this list, so the highlighted orders are the ones this delivery fills.';
+        detailCell.appendChild(note);
+        detailRow.appendChild(detailCell);
+
+        function setOpen(open) {
+          waitBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+          detailRow.hidden = !open;
+          if (open) _recvExpanded[String(v.variant_id)] = true;
+          else delete _recvExpanded[String(v.variant_id)];
+        }
+        // Mark the orders this delivery actually reaches.
+        function markQueue() {
+          var n = check.checked ? (parseInt(qty.value, 10) || 0) : 0;
+          Array.prototype.forEach.call(queue.children, function(el, i) {
+            el.classList.toggle('gets', i < n);
+          });
+        }
+
+        waitBtn.addEventListener('click', function() {
+          setOpen(waitBtn.getAttribute('aria-expanded') !== 'true');
+        });
+
         check.addEventListener('change', function() {
           qty.disabled = !check.checked;
           if (check.checked && !qty.value) qty.value = '1';
           if (!check.checked) qty.value = '';
           row.classList.toggle('is-selected', check.checked);
-          if (check.checked) qty.focus();
+          // Ticking an item is the moment the queue matters, so show it.
+          if (check.checked) { setOpen(true); qty.focus(); }
+          markQueue();
           updateRecvSelection();
         });
         qty.addEventListener('input', function() {
           var n = parseInt(qty.value, 10);
           if (n > 500) qty.value = '500';
           if (n < 1) qty.value = '1';
+          markQueue();
           updateRecvSelection();
         });
 
-        row.appendChild(checkCell); row.appendChild(product); row.appendChild(colour); row.appendChild(detail); row.appendChild(qtyCell);
+        row.appendChild(checkCell); row.appendChild(product); row.appendChild(colour); row.appendChild(detail);
+        row.appendChild(added); row.appendChild(waitCell); row.appendChild(qtyCell);
         body.appendChild(row);
+        body.appendChild(detailRow);
       });
 
       if (!body.children.length) {
         var emptyRow = document.createElement('tr');
-        var emptyCell = document.createElement('td'); emptyCell.colSpan = 5; emptyCell.className = 'empty-state';
+        var emptyCell = document.createElement('td'); emptyCell.colSpan = 7; emptyCell.className = 'empty-state';
         emptyCell.textContent = opts.length ? 'No items match your search.' : 'No customer orders are waiting for items.';
         emptyRow.appendChild(emptyCell); body.appendChild(emptyRow);
       }
@@ -1342,7 +1443,7 @@
     // allocation sees the Shopify tags written by the previous item.
     document.getElementById('recv-btn').addEventListener('click', function() {
       var btn = this;
-      var entries = Array.from(document.querySelectorAll('#recv-body tr')).filter(function(row) {
+      var entries = Array.from(document.querySelectorAll('#recv-body tr.recv-row')).filter(function(row) {
         var check = row.querySelector('.recv-check');
         return check && check.checked;
       }).map(function(row) {
