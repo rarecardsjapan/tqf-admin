@@ -340,11 +340,15 @@
     .recv-new { display: inline-block; margin-left: 0.4rem; padding: 0.1rem 0.36rem; background: #263f2a; color: #fff; font-size: 0.6rem; letter-spacing: 0.09em; text-transform: uppercase; vertical-align: 1px; }
     .recv-table .waiting-cell { width: 92px; }
     .recv-table .qty-cell { width: 130px; }
-    .recv-waiting { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.32rem 0.55rem; border: 1px solid #d8d2c9; background: #fff; font: inherit; font-size: 0.85rem; color: #1a1a1a; font-variant-numeric: tabular-nums; cursor: pointer; }
-    .recv-waiting:hover { border-color: #81796f; }
-    .recv-waiting .caret { display: inline-block; color: #847f77; font-size: 0.72rem; line-height: 1; }
-    .recv-waiting[aria-expanded="true"] { background: #263f2a; border-color: #263f2a; color: #fff; }
-    .recv-waiting[aria-expanded="true"] .caret { color: #cfd9cb; }
+    .recv-waiting-count { font-variant-numeric: tabular-nums; }
+    .recv-expand {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 22px; height: 22px; margin-left: 0.5rem; padding: 0;
+      border: 1px solid #d8d2c9; background: #fff; color: #514d47;
+      font: inherit; font-size: 0.95rem; line-height: 1; cursor: pointer; vertical-align: -5px;
+    }
+    .recv-expand:hover { border-color: #81796f; color: #1a1a1a; }
+    .recv-expand[aria-expanded="true"] { background: #263f2a; border-color: #263f2a; color: #fff; }
     tr.recv-detail[hidden] { display: none; }
     tr.recv-detail > td { padding: 0.8rem 1rem 0.9rem 4.3rem; background: #faf8f5; border-bottom: 1px solid #eeeae4; }
     .recv-queue { display: flex; flex-wrap: wrap; gap: 0.2rem 0.5rem; }
@@ -354,9 +358,6 @@
     .recv-queue-mult { color: #263f2a; font-weight: 600; }
     .recv-queue-item.gets { background: #e6efe2; }
     .recv-queue-item.gets .recv-queue-order { color: #1d3320; }
-    .recv-queue-note { margin: 0.6rem 0 0; color: #847f77; font-size: 0.76rem; }
-    .recv-hide { margin-left: 0.5rem; padding: 0.14rem 0.5rem; border: 1px solid #d8d2c9; background: #fff; font: inherit; font-size: 0.75rem; color: #6b665f; cursor: pointer; }
-    .recv-hide:hover { border-color: #81796f; color: #1a1a1a; }
     .recv-head-tools { display: flex; align-items: center; gap: 0.6rem; }
     .recv-toggle-all { padding: 0.55rem 0.8rem; border: 1px solid #d8d2c9; background: #fff; font: inherit; font-size: 0.82rem; color: #514d47; white-space: nowrap; cursor: pointer; }
     .recv-toggle-all:hover { border-color: #81796f; color: #1a1a1a; }
@@ -490,10 +491,10 @@
         <div class="recv-entry-head">
           <div>
             <h2>Log today’s delivery</h2>
-            <p>Tick everything that arrived, adjust the quantities, then submit once.</p>
+            <p>Tick everything that arrived, adjust the quantities, then submit once.<br />Expand a row to see the orders waiting for it, oldest first. Units are allocated down that list.</p>
           </div>
           <div class="recv-head-tools">
-            <button class="recv-toggle-all" id="recv-toggle-all" type="button">Show all orders</button>
+            <button class="recv-toggle-all" id="recv-toggle-all" type="button">Expand all</button>
             <input class="recv-search" id="recv-search" type="search" placeholder="Search product, colour or size" aria-label="Search receiving items" />
           </div>
         </div>
@@ -1143,10 +1144,10 @@
     // the individual rows are currently showing.
     function updateToggleAllLabel() {
       var btn = document.getElementById('recv-toggle-all');
-      var chips = Array.prototype.slice.call(document.querySelectorAll('#recv-body .recv-waiting'));
+      var chips = Array.prototype.slice.call(document.querySelectorAll('#recv-body .recv-expand'));
       btn.disabled = chips.length === 0;
       var anyClosed = chips.some(function(c) { return c.getAttribute('aria-expanded') !== 'true'; });
-      btn.textContent = anyClosed ? 'Show all orders' : 'Hide all orders';
+      btn.textContent = anyClosed ? 'Expand all' : 'Collapse all';
     }
 
     function renderRecvTable(opts) {
@@ -1193,14 +1194,12 @@
         }
 
         var waitCell = document.createElement('td'); waitCell.className = 'waiting-cell';
-        var waitBtn = document.createElement('button'); waitBtn.type = 'button'; waitBtn.className = 'recv-waiting';
         var isOpen = !!_recvExpanded[String(v.variant_id)];
+        var waitNum = document.createElement('span'); waitNum.className = 'recv-waiting-count';
+        waitNum.textContent = String(v.qty);
+        var waitBtn = document.createElement('button'); waitBtn.type = 'button'; waitBtn.className = 'recv-expand';
         waitBtn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
-        waitBtn.title = 'Show the orders waiting for this item';
-        var waitNum = document.createElement('span'); waitNum.textContent = String(v.qty);
-        var caret = document.createElement('span'); caret.className = 'caret'; caret.textContent = '▾';
-        waitBtn.appendChild(waitNum); waitBtn.appendChild(caret);
-        waitCell.appendChild(waitBtn);
+        waitCell.appendChild(waitNum); waitCell.appendChild(waitBtn);
 
         var qtyCell = document.createElement('td'); qtyCell.className = 'qty-cell';
         var qty = document.createElement('input'); qty.type = 'number'; qty.className = 'recv-qty';
@@ -1228,21 +1227,13 @@
           queue.appendChild(entry);
         });
         detailCell.appendChild(queue);
-        var hide = document.createElement('button'); hide.type = 'button'; hide.className = 'recv-hide';
-        hide.textContent = 'Hide';
-        hide.addEventListener('click', function() { setOpen(false); updateToggleAllLabel(); });
-        detailCell.appendChild(hide);
-        var note = document.createElement('p'); note.className = 'recv-queue-note';
-        note.textContent = 'Oldest order first. Units are allocated down this list, so the highlighted orders are the ones this delivery fills.';
-        detailCell.appendChild(note);
         detailRow.appendChild(detailCell);
 
         function setOpen(open) {
           waitBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
-          // The arrow glyph is swapped rather than rotated: a CSS transform has
-          // no effect on an inline element, so the old caret never flipped.
-          caret.textContent = open ? '▴' : '▾';
+          waitBtn.textContent = open ? '\u2212' : '+';
           waitBtn.title = (open ? 'Hide' : 'Show') + ' the orders waiting for this item';
+          waitBtn.setAttribute('aria-label', waitBtn.title);
           detailRow.hidden = !open;
           if (open) _recvExpanded[String(v.variant_id)] = true;
           else delete _recvExpanded[String(v.variant_id)];
@@ -1471,7 +1462,7 @@
     // Open or shut every row on the sheet at once. Driven through the rows' own
     // buttons so one code path owns the open state.
     document.getElementById('recv-toggle-all').addEventListener('click', function() {
-      var chips = Array.prototype.slice.call(document.querySelectorAll('#recv-body .recv-waiting'));
+      var chips = Array.prototype.slice.call(document.querySelectorAll('#recv-body .recv-expand'));
       var opening = chips.some(function(c) { return c.getAttribute('aria-expanded') !== 'true'; });
       chips.forEach(function(c) {
         if ((c.getAttribute('aria-expanded') === 'true') !== opening) c.click();
