@@ -290,7 +290,8 @@
     .buy td { padding: 13px 16px; font-size: 0.9rem; border-bottom: 1px solid #f0ece5; vertical-align: middle; }
     .buy tr:last-child td { border-bottom: none; }
     .buy tr:hover td { background: #faf9f6; }
-    .buy .prod { font-weight: 500; }
+    .buy .prod { min-width: 280px; font-weight: 500; }
+    .buy-product { display: flex; align-items: center; gap: 0.75rem; }
     .buy .variant { color: #6f6a62; }
     .buy .qty { font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
     .buy .since { color: #999; font-size: 0.82rem; white-space: nowrap; }
@@ -304,6 +305,7 @@
     .dayrow { display: flex; align-items: center; gap: 0.75rem; padding: 11px 16px; border-bottom: 1px solid #f0ece5; font-size: 0.9rem; }
     .dayrow:last-child { border-bottom: none; }
     .dayrow .q { min-width: 34px; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .dayrow .buy-product { min-width: 0; }
     .dayrow .v { color: #6f6a62; }
     .dayrow .edit-receipt { margin-left: auto; border: 1px solid #d8d2c9; background: #fff; color: #514d47; padding: 0.35rem 0.65rem; font: inherit; font-size: 0.72rem; cursor: pointer; }
     .dayrow .edit-receipt:hover { border-color: #81796f; color: #1a1a1a; }
@@ -921,7 +923,7 @@
       orders.forEach(function(o) {
         (o.items || []).forEach(function(it) {
           var key = it.title + '|' + (it.variant || '');
-          if (!map[key]) map[key] = { title: it.title, variant: it.variant || '', qty: 0, since: o.created_at };
+          if (!map[key]) map[key] = { title: it.title, variant: it.variant || '', image: it.image || null, product_url: it.product_url || null, qty: 0, since: o.created_at };
           map[key].qty += it.quantity;
           if (new Date(o.created_at) < new Date(map[key].since)) map[key].since = o.created_at;
         });
@@ -940,7 +942,7 @@
         if (!groups[k]) groups[k] = { date: o.created_at, items: {} };
         (o.items || []).forEach(function(it) {
           var ik = it.title + '|' + (it.variant || '');
-          if (!groups[k].items[ik]) groups[k].items[ik] = { title: it.title, variant: it.variant || '', qty: 0 };
+          if (!groups[k].items[ik]) groups[k].items[ik] = { title: it.title, variant: it.variant || '', image: it.image || null, product_url: it.product_url || null, qty: 0 };
           groups[k].items[ik].qty += it.quantity;
         });
       });
@@ -958,6 +960,22 @@
       return b ? b.dataset.sub : 'buy';
     }
 
+    function buildProductReference(item) {
+      var wrap = document.createElement('div'); wrap.className = 'buy-product';
+      if (item.image) {
+        var imageLink = document.createElement('a'); imageLink.className = 'recv-thumb'; imageLink.href = item.image;
+        imageLink.target = '_blank'; imageLink.rel = 'noopener'; imageLink.title = 'Open full product image';
+        var image = document.createElement('img'); image.src = item.image; image.alt = item.title + (item.variant ? ', ' + item.variant : ''); image.loading = 'lazy';
+        imageLink.appendChild(image); wrap.appendChild(imageLink);
+      } else {
+        var noImage = document.createElement('span'); noImage.className = 'recv-no-image'; noImage.setAttribute('aria-hidden', 'true'); wrap.appendChild(noImage);
+      }
+      var name = document.createElement(item.product_url ? 'a' : 'span'); name.textContent = item.title;
+      if (item.product_url) { name.className = 'recv-product-link'; name.href = item.product_url; name.target = '_blank'; name.rel = 'noopener'; }
+      wrap.appendChild(name);
+      return wrap;
+    }
+
     function renderToOrder() {
       // Only items not yet ordered from the supplier.
       var pending = ALL_ORDERS.filter(function(o) { return !isOrdered(o); });
@@ -971,7 +989,7 @@
       buyBody.textContent = '';
       _toBuy.forEach(function(r) {
         var tr = document.createElement('tr');
-        var t1 = document.createElement('td'); t1.className = 'prod'; t1.textContent = r.title;
+        var t1 = document.createElement('td'); t1.className = 'prod'; t1.appendChild(buildProductReference(r));
         var t2 = document.createElement('td'); t2.className = 'variant'; t2.textContent = r.variant || '—';
         var t3 = document.createElement('td'); t3.className = 'qty'; t3.textContent = r.qty;
         var t4 = document.createElement('td'); t4.className = 'since'; t4.textContent = fmtDay(r.since);
@@ -992,9 +1010,9 @@
         g.items.forEach(function(it) {
           var row = document.createElement('div'); row.className = 'dayrow';
           var q = document.createElement('span'); q.className = 'q'; q.textContent = 'x' + it.qty;
-          var name = document.createElement('span'); name.textContent = it.title;
+          var product = buildProductReference(it);
           var v = document.createElement('span'); v.className = 'v'; v.textContent = it.variant ? '(' + it.variant + ')' : '';
-          row.appendChild(q); row.appendChild(name); row.appendChild(v); box.appendChild(row);
+          row.appendChild(q); row.appendChild(product); row.appendChild(v); box.appendChild(row);
         });
         subDate.appendChild(box);
       });
