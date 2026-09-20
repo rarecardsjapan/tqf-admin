@@ -153,6 +153,8 @@
     .order-customer { font-weight: 500; }
     .order-email { color: #999; font-size: 0.8rem; }
     .order-items { font-size: 0.85rem; color: #666; }
+    .order-items .buy-product + .buy-product { margin-top: 0.6rem; }
+    .order-item-detail { color: #666; white-space: nowrap; }
     .order-total { font-weight: 600; white-space: nowrap; }
 
     /* Checkbox */
@@ -824,6 +826,13 @@
 
     // Render orders
     function renderOrders(orders) {
+      // Oldest first. The longest-waiting order is the one most likely to be
+      // forgotten, so it belongs at the top rather than buried at the bottom.
+      // Copy before sorting: the other views sort this same array themselves.
+      orders = orders.slice().sort(function(a, b) {
+        return new Date(a.created_at) - new Date(b.created_at);
+      });
+
       var tbody = document.getElementById('orders-body');
       var empty = document.getElementById('empty-state');
       var table = document.getElementById('orders-table');
@@ -874,10 +883,14 @@
         // Items
         var tdItems = document.createElement('td');
         tdItems.className = 'order-items';
-        var itemTexts = order.items.map(function(i) {
-          return i.title + (i.variant ? ' (' + i.variant + ')' : '') + ' x' + i.quantity;
+        order.items.forEach(function(item) {
+          var product = buildProductReference(item);
+          var detail = document.createElement('span');
+          detail.className = 'order-item-detail';
+          detail.textContent = (item.variant ? '(' + item.variant + ') ' : '') + 'x' + item.quantity;
+          product.appendChild(detail);
+          tdItems.appendChild(product);
         });
-        tdItems.textContent = itemTexts.join(', ');
         tr.appendChild(tdItems);
 
         // Total
