@@ -396,6 +396,13 @@
     .alloc-line.want { color: #a06510; }
     .alloc-line .item-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .alloc-line .allocation-to { color: #6f6a62; white-space: nowrap; }
+    .alloc-line { align-items: center; }
+    .alloc-line .edit-receipt { margin-left: auto; border: 1px solid #d8d2c9; background: #fff; color: #514d47; padding: 0.25rem 0.6rem; font: inherit; font-size: 0.72rem; cursor: pointer; }
+    .alloc-line .edit-receipt:hover { border-color: #81796f; color: #1a1a1a; }
+    .alloc-line .edit-controls { display: flex; align-items: center; gap: 0.4rem; margin-left: auto; }
+    .alloc-line .edit-controls input { width: 58px; padding: 0.3rem; border: 1px solid #d8d2c9; font: inherit; text-align: center; }
+    .alloc-line .edit-controls button { border: 0; background: transparent; color: #514d47; padding: 0.3rem; font: inherit; font-size: 0.72rem; cursor: pointer; }
+    .alloc-line .edit-controls .save-edit { background: #1a1a1a; color: #fff; padding-inline: 0.6rem; }
     .alloc-line .allocation-to b { color: #171614; font-size: 0.98rem; font-weight: 700; letter-spacing: 0.01em; }
     .alloc-line .cnt { color: #999; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
@@ -1344,6 +1351,13 @@
         cnt.textContent = have ? l.received + ' of ' + l.ordered : 'waiting  ' + l.received + ' of ' + l.ordered;
         row.appendChild(mark); row.appendChild(name); row.appendChild(to);
         if (!have || l.ordered > 1) row.appendChild(cnt);
+        // Any logged receipt can be corrected here, whatever day it was logged.
+        if (l.received > 0) {
+          var edit = document.createElement('button'); edit.className = 'edit-receipt'; edit.textContent = 'Edit';
+          edit.setAttribute('aria-label', 'Edit receipt for ' + l.title + ' on ' + order.name);
+          edit.addEventListener('click', function() { showReceiptEditor(row, { order: order, line: l }); });
+          row.appendChild(edit);
+        }
         lines.appendChild(row);
       });
       box.appendChild(lines);
